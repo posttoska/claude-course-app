@@ -8,7 +8,7 @@ export default function Home() {
       <nav className="flex gap-4 text-sm underline">
         <Link href="/login">Login</Link>
         <Link href="/signup">Sign up</Link>
-        <Link href="/notes">Notes</Link>
+        <Link href="/dashboard">Dashboard</Link>
       </nav>
     </main>
   );

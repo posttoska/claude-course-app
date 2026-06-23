@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# local database (SQLite lives here; created at runtime — never commit)
+/data/
+
 # production
 /build
 
@@ -39,3 +42,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# private course content & Obsidian vaults
+/course_description/
+/claude-course-app-plan/
+/memory-notes/
+/STRUCTURE_REFERENCE.md
+
+# Obsidian config (any vault, anywhere)
+.obsidian/
+.obsidian-*
+*.obsidian

@@ -16,27 +16,18 @@ So I hope the author is ok about me using similar repo, since materials I attach
 APP PART
 -------------------------
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is a [Next.js](https://nextjs.org) (App Router) project. It runs on **Bun** — it uses `bun:sqlite`, which requires the Bun runtime, so use Bun rather than npm/pnpm/yarn.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install      # install dependencies
+bun run dev      # dev server at http://localhost:3000 (runs `bun --bun next dev`)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The SQLite database under `data/` and its tables are created automatically on first run. Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See `SPEC.md` for the full design and `CLAUDE.md` for repo conventions. You start editing at `app/page.tsx`.
 
 ## Learn More
 
