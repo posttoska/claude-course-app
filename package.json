@@ -9,13 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@tiptap/pm": "^3.27.0",
-    "@tiptap/starter-kit": "^3.27.0",
+    "@tailwindcss/typography": "^0.5.20",
+    "@tiptap/pm": "^3.27.1",
+    "@tiptap/react": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
     "better-auth": "^1.6.19",
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "@tiptap/core": "3.27.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

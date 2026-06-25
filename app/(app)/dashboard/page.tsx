@@ -1,14 +1,25 @@
+import Link from "next/link";
 import { requireSession } from "@/lib/session";
+import { listNotesByUser } from "@/lib/notes";
+import { NoteList } from "@/components/NoteList";
 
 export default async function DashboardPage() {
   const session = await requireSession();
+  const notes = listNotesByUser(session.user.id);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-2">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
-      <p className="text-sm text-foreground/60">
-        Signed in as {session.user.email}. Your notes will appear here.
-      </p>
+    <main className="mx-auto w-full max-w-2xl px-4 py-10">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold">Your notes</h1>
+        <Link
+          href="/notes/new"
+          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition hover:opacity-90"
+        >
+          New Note
+        </Link>
+      </div>
+
+      <NoteList notes={notes} />
     </main>
   );
 }
