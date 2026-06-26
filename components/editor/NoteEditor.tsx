@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import { extensions } from "@/lib/tiptap";
-import { deleteNote, updateNote } from "@/actions/notes";
+import { updateNote } from "@/actions/notes";
 import { Toolbar } from "@/components/editor/Toolbar";
+import { ShareControl } from "@/components/ShareControl";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -13,17 +15,19 @@ export function NoteEditor({
   noteId,
   initialTitle,
   initialContent,
+  initialIsPublic,
+  initialPublicId,
 }: {
   noteId: string;
   initialTitle: string;
   initialContent: JSONContent;
+  initialIsPublic: boolean;
+  initialPublicId: string | null;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState<SaveStatus>("idle");
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const editor = useEditor({
     extensions,
@@ -47,6 +51,15 @@ export function NoteEditor({
     setStatus("idle");
   }, []);
 
+  // Warn before a hard navigation (reload/close/external link) drops unsaved
+  // edits. In-app navigation away from the editor is guarded per-link instead.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
   const handleSave = useCallback(async () => {
     if (!editor) return;
     setStatus("saving");
@@ -57,25 +70,13 @@ export function NoteEditor({
     if (result.ok) {
       setDirty(false);
       setStatus("saved");
-      router.refresh(); // refresh the dashboard list (updated_at / label)
+      // Re-sync THIS edit route's server data after save; /dashboard and the
+      // /notes/[id] view are freshened by revalidatePath() inside updateNote.
+      router.refresh();
     } else {
       setStatus("error");
     }
   }, [editor, noteId, title, router]);
-
-  const handleDelete = useCallback(async () => {
-    if (!window.confirm("Delete this note? This cannot be undone.")) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await deleteNote(noteId);
-      router.push("/dashboard");
-    } catch {
-      // Recover the UI instead of hanging on "Deleting…".
-      setDeleting(false);
-      setDeleteError("Could not delete the note. Please try again.");
-    }
-  }, [noteId, router]);
 
   if (!editor) return null;
 
@@ -108,43 +109,42 @@ export function NoteEditor({
       <Toolbar editor={editor} />
       <EditorContent editor={editor} />
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!dirty || status === "saving"}
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-50"
-          >
-            {status === "saving" ? "Saving…" : "Save"}
-          </button>
-          <span
-            role="status"
-            aria-live="polite"
-            className={`text-xs ${
-              status === "error" ? "text-red-600 dark:text-red-400" : "text-foreground/50"
-            }`}
-          >
-            {statusText}
-          </span>
-        </div>
-
-        <div className="flex flex-col items-end gap-1">
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded-md border border-red-500/40 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
-          >
-            {deleting ? "Deleting…" : "Delete"}
-          </button>
-          {deleteError && (
-            <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-              {deleteError}
-            </span>
-          )}
-        </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!dirty || status === "saving"}
+          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-50"
+        >
+          {status === "saving" ? "Saving…" : "Save"}
+        </button>
+        <span
+          role="status"
+          aria-live="polite"
+          className={`text-xs ${
+            status === "error" ? "text-red-600 dark:text-red-400" : "text-foreground/50"
+          }`}
+        >
+          {statusText}
+        </span>
+        <Link
+          href={`/notes/${noteId}`}
+          onClick={(e) => {
+            if (dirty && !window.confirm("Discard unsaved changes?")) {
+              e.preventDefault();
+            }
+          }}
+          className="text-xs text-foreground/60 transition hover:opacity-70"
+        >
+          Back to note
+        </Link>
       </div>
+
+      <ShareControl
+        noteId={noteId}
+        initialIsPublic={initialIsPublic}
+        initialPublicId={initialPublicId}
+      />
     </div>
   );
 }

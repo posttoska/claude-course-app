@@ -4,11 +4,7 @@ import { NoteDate } from "@/components/NoteDate";
 
 export function NoteList({ notes }: { notes: NoteRow[] }) {
   if (notes.length === 0) {
-    return (
-      <p className="text-sm text-foreground/60">
-        No notes yet — create your first one.
-      </p>
-    );
+    return <p className="text-sm text-foreground/60">No notes yet — create your first one.</p>;
   }
 
   return (

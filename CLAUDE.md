@@ -40,7 +40,7 @@ There is **no test framework configured** — no test runner, no test scripts. I
 
 Database setup is automatic — there is no manual migration step. On cold start, `lib/auth.ts` runs better-auth's migrations (`getMigrations` → `runMigrations`, idempotent) to create the `user`/`session`/`account`/`verification` tables, and `lib/db.ts` runs `CREATE TABLE IF NOT EXISTS notes`.
 
-**Decision (resolves a SPEC §17 open item):** the `notes` schema lives in `lib/db.ts`, *not* a separate `scripts/init-db.ts` — there is no `scripts/` dir and no `db:*` scripts. The SPEC §15 manual commands (`bunx auth migrate`, `bun run scripts/init-db.ts`) are **not** used here.
+**Decision (resolves a SPEC §17 open item):** the `notes` schema lives in `lib/db.ts`, _not_ a separate `scripts/init-db.ts` — there is no `scripts/` dir and no `db:*` scripts. The SPEC §15 manual commands (`bunx auth migrate`, `bun run scripts/init-db.ts`) are **not** used here.
 
 ## Architecture (target, per SPEC)
 
@@ -53,7 +53,7 @@ App Router with a strict **reads vs. writes** split:
 
 ### Invariants that must not be broken
 
-- **Authorization is re-checked server-side on every single-note read and every mutation** (`note.user_id === session.user.id`). `middleware.ts` is an *optimistic UX redirect only* (cookie-presence check) and is never the real gate. Return **404 (`notFound()`), not 403**, for notes the user doesn't own, so existence isn't revealed.
+- **Authorization is re-checked server-side on every single-note read and every mutation** (`note.user_id === session.user.id`). `middleware.ts` is an _optimistic UX redirect only_ (cookie-presence check) and is never the real gate. Return **404 (`notFound()`), not 403**, for notes the user doesn't own, so existence isn't revealed.
 - **Public access is gated solely on `is_public = 1`, looked up by the high-entropy `public_id`** — never by the internal note `id`. Public URLs are `/share/{public_id}`. The internal id is never exposed on public routes.
 - **Note content is stored as TipTap/ProseMirror JSON** (`JSON.stringify(editor.getJSON())`) in a TEXT column, **never raw HTML**. The public page renders it server-side with `@tiptap/static-renderer`'s `renderToReactElement` (React-escaped, no `dangerouslySetInnerHTML`).
 - **`lib/tiptap.ts` is the single source of truth for the editor extension set, shared by both the client editor and the server renderer.** They must use the identical config or node/mark mappings won't match. Disabling unused StarterKit extensions is also a security measure (constrains the doc schema) — see SPEC §9.1, §14.1.

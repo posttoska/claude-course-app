@@ -1,0 +1,43 @@
+- generic [active] [ref=e1]:
+    - generic [ref=e2]:
+        - banner [ref=e3]:
+            - generic [ref=e4]:
+                - link "NextNotes" [ref=e5] [cursor=pointer]:
+                    - /url: /dashboard
+                - generic [ref=e6]:
+                    - generic [ref=e7]:
+                        - generic [ref=e8]: Signed in as
+                        - text: tester.a.4842@example.com
+                    - button "Sign out" [ref=e9]
+        - main [ref=e81]:
+            - generic [ref=e82]:
+                - textbox "Note title" [ref=e83]:
+                    - /placeholder: Untitled note
+                    - text: My First Note
+                - toolbar "Text formatting" [ref=e84]:
+                    - button "Bold" [ref=e85]: B
+                    - button "Italic" [ref=e86]: I
+                    - button "Heading 1" [ref=e87]: H1
+                    - button "Heading 2" [ref=e88]: H2
+                    - button "Heading 3" [ref=e89]: H3
+                    - button "Paragraph" [pressed] [ref=e90]: ¶
+                    - button "Inline code" [ref=e91]: </>
+                    - button "Code block" [ref=e92]
+                    - button "Bullet list" [ref=e93]: • List
+                    - button "Horizontal rule" [ref=e94]: —
+                - generic "Note content" [ref=e96]:
+                    - paragraph [ref=e97]: Hello world body text
+                - generic [ref=e98]:
+                    - button "Save" [disabled] [ref=e99]
+                    - status
+                    - link "Back to note" [ref=e100] [cursor=pointer]:
+                        - /url: /notes/8588701a-2792-4f26-ae59-e0bd5405ad02
+                - region "Public sharing" [ref=e101]:
+                    - generic [ref=e102]:
+                        - generic [ref=e103]:
+                            - heading "Public sharing" [level=2] [ref=e104]
+                            - paragraph [ref=e105]: This note is private. Turn on sharing to get a public link.
+                        - button "Make public" [ref=e106]
+    - button "Open Next.js Dev Tools" [ref=e40] [cursor=pointer]:
+        - img [ref=e41]
+    - alert [ref=e44]

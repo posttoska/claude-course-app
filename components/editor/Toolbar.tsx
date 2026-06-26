@@ -22,15 +22,60 @@ export function Toolbar({ editor }: { editor: Editor }) {
   });
 
   const toggles: { label: string; title: string; active: boolean; run: () => void }[] = [
-    { label: "B", title: "Bold", active: state.isBold, run: () => editor.chain().focus().toggleBold().run() },
-    { label: "I", title: "Italic", active: state.isItalic, run: () => editor.chain().focus().toggleItalic().run() },
-    { label: "H1", title: "Heading 1", active: state.isH1, run: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
-    { label: "H2", title: "Heading 2", active: state.isH2, run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
-    { label: "H3", title: "Heading 3", active: state.isH3, run: () => editor.chain().focus().toggleHeading({ level: 3 }).run() },
-    { label: "¶", title: "Paragraph", active: state.isParagraph, run: () => editor.chain().focus().setParagraph().run() },
-    { label: "</>", title: "Inline code", active: state.isCode, run: () => editor.chain().focus().toggleCode().run() },
-    { label: "Code block", title: "Code block", active: state.isCodeBlock, run: () => editor.chain().focus().toggleCodeBlock().run() },
-    { label: "• List", title: "Bullet list", active: state.isBulletList, run: () => editor.chain().focus().toggleBulletList().run() },
+    {
+      label: "B",
+      title: "Bold",
+      active: state.isBold,
+      run: () => editor.chain().focus().toggleBold().run(),
+    },
+    {
+      label: "I",
+      title: "Italic",
+      active: state.isItalic,
+      run: () => editor.chain().focus().toggleItalic().run(),
+    },
+    {
+      label: "H1",
+      title: "Heading 1",
+      active: state.isH1,
+      run: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+    },
+    {
+      label: "H2",
+      title: "Heading 2",
+      active: state.isH2,
+      run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+    },
+    {
+      label: "H3",
+      title: "Heading 3",
+      active: state.isH3,
+      run: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+    },
+    {
+      label: "¶",
+      title: "Paragraph",
+      active: state.isParagraph,
+      run: () => editor.chain().focus().setParagraph().run(),
+    },
+    {
+      label: "</>",
+      title: "Inline code",
+      active: state.isCode,
+      run: () => editor.chain().focus().toggleCode().run(),
+    },
+    {
+      label: "Code block",
+      title: "Code block",
+      active: state.isCodeBlock,
+      run: () => editor.chain().focus().toggleCodeBlock().run(),
+    },
+    {
+      label: "• List",
+      title: "Bullet list",
+      active: state.isBulletList,
+      run: () => editor.chain().focus().toggleBulletList().run(),
+    },
   ];
 
   const btnClass = (active: boolean) =>

@@ -29,9 +29,7 @@ export async function createNote(formData: FormData): Promise<void> {
     const rawContent = formData.get("content");
     title = normalizeTitle(typeof rawTitle === "string" ? rawTitle : null);
     const doc =
-      typeof rawContent === "string" && rawContent.length > 0
-        ? JSON.parse(rawContent)
-        : EMPTY_DOC;
+      typeof rawContent === "string" && rawContent.length > 0 ? JSON.parse(rawContent) : EMPTY_DOC;
     content = serializeContent(doc);
   } catch {
     throw new Error("INVALID_INPUT");
@@ -100,4 +98,42 @@ export async function deleteNote(id: string): Promise<void> {
     $uid: userId,
   });
   revalidatePath("/dashboard");
+}
+
+// Result of a sharing toggle. Returns the public id so the client can render the
+// share link without a refetch.
+export type ShareResult =
+  | { ok: true; isPublic: boolean; publicId: string | null }
+  | { ok: false; error: string };
+
+// Turn public sharing on/off for an owned note (SPEC §8, §10, §14.2). Public
+// access is gated SOLELY on is_public = 1 looked up by the high-entropy
+// public_id, so flipping is_public to 0 makes the /share link 404 ("leads
+// nowhere"). We KEEP the public_id when unsharing, so re-enabling sharing
+// revives the SAME link (user's chosen semantics).
+export async function setNoteSharing(id: string, makePublic: boolean): Promise<ShareResult> {
+  const userId = await requireUserId();
+
+  const note = getOwnedNote(id, userId);
+  if (!note) return { ok: false, error: "NOT_FOUND" };
+
+  // Generate a high-entropy public_id on first share; reuse it thereafter.
+  const publicId = makePublic ? (note.public_id ?? crypto.randomUUID()) : note.public_id;
+
+  db.query(
+    `UPDATE notes SET is_public = $pub, public_id = $pid
+     WHERE id = $id AND user_id = $uid`,
+  ).run({
+    $pub: makePublic ? 1 : 0,
+    $pid: publicId,
+    $id: id,
+    $uid: userId,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/notes/${id}`);
+  revalidatePath(`/notes/${id}/edit`);
+  if (publicId) revalidatePath(`/share/${publicId}`);
+
+  return { ok: true, isPublic: makePublic, publicId: publicId ?? null };
 }

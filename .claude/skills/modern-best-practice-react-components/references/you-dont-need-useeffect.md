@@ -29,13 +29,13 @@ Suppose you have a component with two state variables: `firstName` and `lastName
 
 ```jsx
 function Form() {
-  const [firstName, setFirstName] = useState('Taylor');
-  const [lastName, setLastName] = useState('Swift');
+  const [firstName, setFirstName] = useState("Taylor");
+  const [lastName, setLastName] = useState("Swift");
 
   // 🔴 Avoid: redundant state and unnecessary Effect
-  const [fullName, setFullName] = useState('');
+  const [fullName, setFullName] = useState("");
   useEffect(() => {
-    setFullName(firstName + ' ' + lastName);
+    setFullName(firstName + " " + lastName);
   }, [firstName, lastName]);
   // ...
 }
@@ -45,10 +45,10 @@ This is more complicated than necessary. It is inefficient too: it does an entir
 
 ```jsx
 function Form() {
-  const [firstName, setFirstName] = useState('Taylor');
-  const [lastName, setLastName] = useState('Swift');
+  const [firstName, setFirstName] = useState("Taylor");
+  const [lastName, setLastName] = useState("Swift");
   // ✅ Good: calculated during rendering
-  const fullName = firstName + ' ' + lastName;
+  const fullName = firstName + " " + lastName;
   // ...
 }
 ```
@@ -61,7 +61,7 @@ This component computes `visibleTodos` by taking the `todos` it receives by prop
 
 ```jsx
 function TodoList({ todos, filter }) {
-  const [newTodo, setNewTodo] = useState('');
+  const [newTodo, setNewTodo] = useState("");
 
   // 🔴 Avoid: redundant state and unnecessary Effect
   const [visibleTodos, setVisibleTodos] = useState([]);
@@ -77,7 +77,7 @@ Like in the earlier example, this is both unnecessary and inefficient. First, re
 
 ```jsx
 function TodoList({ todos, filter }) {
-  const [newTodo, setNewTodo] = useState('');
+  const [newTodo, setNewTodo] = useState("");
   // ✅ This is fine if getFilteredTodos() is not slow.
   const visibleTodos = getFilteredTodos(todos, filter);
   // ...
@@ -91,10 +91,10 @@ You can cache (or "memoize") an expensive calculation by wrapping it in a `useMe
 > **Note:** React Compiler can automatically memoize expensive calculations for you, eliminating the need for manual `useMemo` in many cases.
 
 ```jsx
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 
 function TodoList({ todos, filter }) {
-  const [newTodo, setNewTodo] = useState('');
+  const [newTodo, setNewTodo] = useState("");
   const visibleTodos = useMemo(() => {
     // ✅ Does not re-run unless todos or filter change
     return getFilteredTodos(todos, filter);
@@ -106,10 +106,10 @@ function TodoList({ todos, filter }) {
 Or, written as a single line:
 
 ```jsx
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 
 function TodoList({ todos, filter }) {
-  const [newTodo, setNewTodo] = useState('');
+  const [newTodo, setNewTodo] = useState("");
   // ✅ Does not re-run getFilteredTodos() unless todos or filter change
   const visibleTodos = useMemo(() => getFilteredTodos(todos, filter), [todos, filter]);
   // ...
@@ -126,11 +126,11 @@ This `ProfilePage` component receives a `userId` prop. The page contains a comme
 
 ```jsx
 export default function ProfilePage({ userId }) {
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState("");
 
   // 🔴 Avoid: Resetting state on prop change in an Effect
   useEffect(() => {
-    setComment('');
+    setComment("");
   }, [userId]);
   // ...
 }
@@ -147,7 +147,7 @@ export default function ProfilePage({ userId }) {
 
 function Profile({ userId }) {
   // ✅ This and any other state below will reset on key change automatically
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState("");
   // ...
 }
 ```
@@ -231,7 +231,7 @@ function ProductPage({ product, addToCart }) {
 
   function handleCheckoutClick() {
     addToCart(product);
-    navigateTo('/checkout');
+    navigateTo("/checkout");
   }
   // ...
 }
@@ -255,7 +255,7 @@ function ProductPage({ product, addToCart }) {
 
   function handleCheckoutClick() {
     buyProduct();
-    navigateTo('/checkout');
+    navigateTo("/checkout");
   }
   // ...
 }
@@ -269,19 +269,19 @@ This `Form` component sends two kinds of POST requests. It sends an analytics ev
 
 ```jsx
 function Form() {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
 
   // ✅ Good: This logic should run because the component was displayed
   useEffect(() => {
-    post('/analytics/event', { eventName: 'visit_form' });
+    post("/analytics/event", { eventName: "visit_form" });
   }, []);
 
   // 🔴 Avoid: Event-specific logic inside an Effect
   const [jsonToSubmit, setJsonToSubmit] = useState(null);
   useEffect(() => {
     if (jsonToSubmit !== null) {
-      post('/api/register', jsonToSubmit);
+      post("/api/register", jsonToSubmit);
     }
   }, [jsonToSubmit]);
 
@@ -301,18 +301,18 @@ However, the `/api/register` POST request is not caused by the form being _displ
 
 ```jsx
 function Form() {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
 
   // ✅ Good: This logic runs because the component was displayed
   useEffect(() => {
-    post('/analytics/event', { eventName: 'visit_form' });
+    post("/analytics/event", { eventName: "visit_form" });
   }, []);
 
   function handleSubmit(e) {
     e.preventDefault();
     // ✅ Good: Event-specific logic is in the event handler
-    post('/api/register', { firstName, lastName });
+    post("/api/register", { firstName, lastName });
   }
   // ...
 }
@@ -352,12 +352,12 @@ function Game() {
   }, [round]);
 
   useEffect(() => {
-    alert('Good game!');
+    alert("Good game!");
   }, [isGameOver]);
 
   function handlePlaceCard(nextCard) {
     if (isGameOver) {
-      throw Error('Game already ended.');
+      throw Error("Game already ended.");
     } else {
       setCard(nextCard);
     }
@@ -386,7 +386,7 @@ function Game() {
 
   function handlePlaceCard(nextCard) {
     if (isGameOver) {
-      throw Error('Game already ended.');
+      throw Error("Game already ended.");
     }
 
     // ✅ Calculate all the next state in the event handler
@@ -398,7 +398,7 @@ function Game() {
         setGoldCardCount(0);
         setRound(round + 1);
         if (round === 5) {
-          alert('Good game!');
+          alert("Good game!");
         }
       }
     }
@@ -454,7 +454,7 @@ function App() {
 You can also run it during module initialization and before the app renders:
 
 ```jsx
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   // Check if we're running in the browser.
   // ✅ Only runs once per app load
   checkAuthToken();
@@ -607,11 +607,11 @@ function useOnlineStatus() {
 
     updateState();
 
-    window.addEventListener('online', updateState);
-    window.addEventListener('offline', updateState);
+    window.addEventListener("online", updateState);
+    window.addEventListener("offline", updateState);
     return () => {
-      window.removeEventListener('online', updateState);
-      window.removeEventListener('offline', updateState);
+      window.removeEventListener("online", updateState);
+      window.removeEventListener("offline", updateState);
     };
   }, []);
   return isOnline;
@@ -629,11 +629,11 @@ Although it's common to use Effects for this, React has a purpose-built Hook for
 
 ```jsx
 function subscribe(callback) {
-  window.addEventListener('online', callback);
-  window.addEventListener('offline', callback);
+  window.addEventListener("online", callback);
+  window.addEventListener("offline", callback);
   return () => {
-    window.removeEventListener('online', callback);
-    window.removeEventListener('offline', callback);
+    window.removeEventListener("online", callback);
+    window.removeEventListener("offline", callback);
   };
 }
 

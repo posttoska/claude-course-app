@@ -106,9 +106,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           minLength={isSignup ? 8 : undefined}
           className={fieldClass}
         />
-        {isSignup && (
-          <p className="text-xs text-foreground/60">At least 8 characters.</p>
-        )}
+        {isSignup && <p className="text-xs text-foreground/60">At least 8 characters.</p>}
       </div>
 
       {error && (
@@ -128,10 +126,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
       <p className="text-sm text-foreground/70">
         {copy.prompt}{" "}
-        <Link
-          href={copy.toggleHref}
-          className="font-medium underline underline-offset-4"
-        >
+        <Link href={copy.toggleHref} className="font-medium underline underline-offset-4">
           {copy.toggleLabel}
         </Link>
       </p>

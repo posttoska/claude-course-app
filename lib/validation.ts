@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { JSONContent } from "@tiptap/core";
 
 // Hard caps for note input (SPEC §13). Validated on the server for every
 // mutation — never trust the client.
@@ -23,10 +24,27 @@ export const NoteContentSchema = z.object({
 });
 
 // The document a brand-new note starts with: a single empty paragraph.
-export const EMPTY_DOC = {
+export const EMPTY_DOC: JSONContent = {
   type: "doc",
   content: [{ type: "paragraph" }],
 };
+
+// Parse a stored note's serialized content into a TipTap document. A row that is
+// not valid JSON, OR whose JSON isn't a doc envelope — including the literal
+// `null`, which JSON.parse returns *without throwing* — degrades to an empty
+// document. This keeps a corrupt/hand-crafted row from reaching the renderer as
+// a non-doc value (SPEC §10.3 resilience).
+export function parseNoteContent(raw: string): JSONContent {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (NoteContentSchema.safeParse(parsed).success) {
+      return parsed as JSONContent;
+    }
+  } catch {
+    // malformed JSON — fall through to EMPTY_DOC
+  }
+  return EMPTY_DOC;
+}
 
 // Validate + normalize a title input. Throws (ZodError) on an invalid type.
 export function normalizeTitle(input: unknown): string | null {

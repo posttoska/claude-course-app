@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+    - button "Open Next.js Dev Tools" [ref=e19] [cursor=pointer]:
+        - img [ref=e20]
+    - alert [ref=e23]
+    - generic [ref=e40]:
+        - banner [ref=e41]:
+            - generic [ref=e42]:
+                - link "NextNotes" [ref=e43] [cursor=pointer]:
+                    - /url: /dashboard
+                - generic [ref=e44]:
+                    - generic [ref=e45]:
+                        - generic [ref=e46]: Signed in as
+                        - text: tester.b.4842@example.com
+                    - button "Sign out" [ref=e47]
+        - main [ref=e48]:
+            - generic [ref=e49]:
+                - heading "Your notes" [level=1] [ref=e50]
+                - link "New Note" [ref=e51] [cursor=pointer]:
+                    - /url: /notes/new
+            - paragraph [ref=e52]: No notes yet — create your first one.

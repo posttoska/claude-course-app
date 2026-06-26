@@ -6,16 +6,10 @@
 // `suppressHydrationWarning` lets the server's fallback render be corrected to
 // local time on hydration without a mismatch warning.
 export function NoteDate({ iso }: { iso: string }) {
-  const label = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    new Date(iso),
-  );
+  const label = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso));
 
   return (
-    <time
-      dateTime={iso}
-      suppressHydrationWarning
-      className="shrink-0 text-xs text-foreground/50"
-    >
+    <time dateTime={iso} suppressHydrationWarning className="shrink-0 text-xs text-foreground/50">
       {label}
     </time>
   );

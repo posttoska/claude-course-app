@@ -1,6 +1,8 @@
 -------------------------
 DISCLAIMER
--------------------------
+---
+
+---
 
 This repo is just practicing exercise while watching "Claude Code - The Practical Guide" course on Udemy.
 This is implementation of student of that course. So it could be wrong or inconsistent in some mements.
@@ -12,9 +14,9 @@ https://www.udemy.com/course/claude-code-the-practical-guide
 
 So I hope the author is ok about me using similar repo, since materials I attach are published already by him or generated it with Claude Code by myself. So no copyright violation here I hope so.
 
--------------------------
-APP PART
--------------------------
+---
+
+## APP PART
 
 This is a [Next.js](https://nextjs.org) (App Router) project. It runs on **Bun** — it uses `bun:sqlite`, which requires the Bun runtime, so use Bun rather than npm/pnpm/yarn.
 

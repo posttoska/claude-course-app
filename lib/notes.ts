@@ -25,10 +25,17 @@ export function getOwnedNote(id: string, userId: string): NoteRow | null {
     .get({ $id: id, $uid: userId }) as NoteRow | null;
 }
 
-export function getPublicNote(publicId: string): NoteRow | null {
+// Public-safe projection: the internal `id` and `user_id` are deliberately NOT
+// selected, so they can never reach the public /share route regardless of how
+// that page evolves (SPEC §14.2/§14.5 — internal ids are never exposed publicly).
+export type PublicNote = Pick<NoteRow, "title" | "content" | "created_at" | "updated_at">;
+
+export function getPublicNote(publicId: string): PublicNote | null {
   return db
-    .query("SELECT * FROM notes WHERE public_id = $pid AND is_public = 1")
-    .get({ $pid: publicId }) as NoteRow | null;
+    .query(
+      "SELECT title, content, created_at, updated_at FROM notes WHERE public_id = $pid AND is_public = 1",
+    )
+    .get({ $pid: publicId }) as PublicNote | null;
 }
 
 // ---- Display label (title or derived-from-content) ----
@@ -36,16 +43,18 @@ export function getPublicNote(publicId: string): NoteRow | null {
 const MAX_DERIVED_TITLE = 80;
 export const FALLBACK_TITLE = "Untitled note";
 
-// First non-empty text node in a TipTap doc, depth-first.
-function firstText(node: unknown): string | null {
-  if (!node || typeof node !== "object") return null;
+// First non-empty text node in a TipTap doc, depth-first. The depth cap turns a
+// pathologically nested (malformed/hostile) doc into a graceful miss instead of
+// a stack overflow.
+function firstText(node: unknown, depth = 0): string | null {
+  if (depth > 300 || !node || typeof node !== "object") return null;
   const n = node as { text?: unknown; content?: unknown };
   if (typeof n.text === "string" && n.text.trim().length > 0) {
     return n.text.trim();
   }
   if (Array.isArray(n.content)) {
     for (const child of n.content) {
-      const found = firstText(child);
+      const found = firstText(child, depth + 1);
       if (found) return found;
     }
   }
@@ -57,14 +66,13 @@ function firstText(node: unknown): string | null {
 export function noteLabel(note: Pick<NoteRow, "title" | "content">): string {
   if (note.title && note.title.trim().length > 0) return note.title.trim();
 
-  let doc: unknown;
+  let text: string | null;
   try {
-    doc = JSON.parse(note.content);
+    text = firstText(JSON.parse(note.content));
   } catch {
     return FALLBACK_TITLE;
   }
 
-  const text = firstText(doc);
   if (!text) return FALLBACK_TITLE;
   // Slice over code points (not UTF-16 units) so we never split an astral
   // character (emoji, rare CJK) into a lone surrogate.

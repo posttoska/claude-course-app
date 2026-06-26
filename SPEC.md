@@ -28,16 +28,16 @@ Real‑time collaboration, comments, folders/tags, full‑text search, image/fil
 
 ## 2. Tech Stack
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Runtime / toolchain | **Bun** (package manager + JS runtime) | Required to use `bun:sqlite`. See the runtime caveat in §3.2. |
-| Framework | **Next.js (App Router, v15/16)** | Server Components for reads, Server Actions for mutations. |
-| Language | **TypeScript** (strict) | |
-| Styling | **TailwindCSS v4** | CSS‑first config (`@import "tailwindcss"`); no `tailwind.config.js` needed. Add `@plugin "@tailwindcss/typography"` for `prose` rendering. |
-| Auth | **better-auth** | Email/password, cookie sessions, schema + migrations via its CLI. |
-| Editor | **TipTap v3** (`@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/pm`) | Headless ProseMirror editor. |
-| Server‑side render of note content | **`@tiptap/static-renderer`** | Renders TipTap JSON → React/HTML with no browser/editor instance (used for the public page). |
-| Database | **SQLite** via **`bun:sqlite`** (`Database`) | Raw SQL, prepared statements. Single file, WAL mode. |
+| Layer                              | Choice                                                               | Notes                                                                                                                                      |
+| ---------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Runtime / toolchain                | **Bun** (package manager + JS runtime)                               | Required to use `bun:sqlite`. See the runtime caveat in §3.2.                                                                              |
+| Framework                          | **Next.js (App Router, v15/16)**                                     | Server Components for reads, Server Actions for mutations.                                                                                 |
+| Language                           | **TypeScript** (strict)                                              |                                                                                                                                            |
+| Styling                            | **TailwindCSS v4**                                                   | CSS‑first config (`@import "tailwindcss"`); no `tailwind.config.js` needed. Add `@plugin "@tailwindcss/typography"` for `prose` rendering. |
+| Auth                               | **better-auth**                                                      | Email/password, cookie sessions, schema + migrations via its CLI.                                                                          |
+| Editor                             | **TipTap v3** (`@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/pm`) | Headless ProseMirror editor.                                                                                                               |
+| Server‑side render of note content | **`@tiptap/static-renderer`**                                        | Renders TipTap JSON → React/HTML with no browser/editor instance (used for the public page).                                               |
+| Database                           | **SQLite** via **`bun:sqlite`** (`Database`)                         | Raw SQL, prepared statements. Single file, WAL mode.                                                                                       |
 
 > **One database file, two consumers.** better-auth and the notes layer share the same SQLite file and the same `Database` instance (§6). better-auth manages its four tables through its Kysely adapter; the `notes` table is managed by your own SQL.
 
@@ -72,18 +72,19 @@ Next.js (App Router, running on the Bun runtime)
 // package.json
 {
   "scripts": {
-    "dev":   "bun --bun next dev",
+    "dev": "bun --bun next dev",
     "build": "bun --bun next build",
     "start": "bun --bun next start",
-    "db:auth": "bunx auth@latest migrate",   // creates auth tables
-    "db:init": "bun run scripts/init-db.ts"        // creates the notes table
-  }
+    "db:auth": "bunx auth@latest migrate", // creates auth tables
+    "db:init": "bun run scripts/init-db.ts", // creates the notes table
+  },
 }
 ```
 
 Next.js still uses its own bundler (Turbopack/Webpack); `--bun` only swaps the runtime underneath, which is what makes `bun:sqlite` available inside Server Components, Server Actions, and route handlers.
 
 Two practical risks to plan for:
+
 - **Windows:** the Bun runtime + Next.js dev server can be rough on native Windows in some Bun versions. If you hit socket/hot‑reload/`4xx`‑on‑POST oddities in dev, run inside **WSL2**.
 - **Fallback:** if the Bun runtime proves unstable for your setup, you can keep everything else and swap the DB driver to `node:sqlite` (`import { DatabaseSync } from "node:sqlite"`, Node ≥ 22.5) or `better-sqlite3`. better-auth supports all three, and the raw‑SQL data layer needs only a thin adapter change. Decide this early (§17).
 
@@ -198,8 +199,8 @@ export const db = new Database(process.env.DATABASE_PATH ?? "./data/app.sqlite",
 });
 
 // Connection-level pragmas (safe to run on every cold start):
-db.exec("PRAGMA journal_mode = WAL;");   // better read concurrency
-db.exec("PRAGMA foreign_keys = ON;");    // enforce ON DELETE CASCADE
+db.exec("PRAGMA journal_mode = WAL;"); // better read concurrency
+db.exec("PRAGMA foreign_keys = ON;"); // enforce ON DELETE CASCADE
 ```
 
 Query rules:
@@ -213,9 +214,14 @@ Query rules:
 import { db } from "./db";
 
 export type NoteRow = {
-  id: string; user_id: string; title: string | null;
-  content: string; is_public: number; public_id: string | null;
-  created_at: string; updated_at: string;
+  id: string;
+  user_id: string;
+  title: string | null;
+  content: string;
+  is_public: number;
+  public_id: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export function listNotesByUser(userId: string): NoteRow[] {
@@ -252,9 +258,9 @@ import { nextCookies } from "better-auth/next-js";
 import { db } from "./db";
 
 export const auth = betterAuth({
-  database: db,                       // the shared bun:sqlite Database
+  database: db, // the shared bun:sqlite Database
   emailAndPassword: { enabled: true },
-  plugins: [nextCookies()],           // MUST be last; lets server-side calls set cookies
+  plugins: [nextCookies()], // MUST be last; lets server-side calls set cookies
 });
 ```
 
@@ -309,7 +315,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 export function middleware(request: NextRequest) {
-  const hasCookie = getSessionCookie(request);          // existence check only
+  const hasCookie = getSessionCookie(request); // existence check only
   if (!hasCookie) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
@@ -319,21 +325,21 @@ export function middleware(request: NextRequest) {
 export const config = { matcher: ["/notes/:path*"] };
 ```
 
-> **Security note:** `getSessionCookie` only checks that a cookie *exists*; it does **not** validate it, and it has known edge cases in some Next/Bun versions. Treat middleware purely as a UX redirect. The real gate is the `auth.api.getSession` check inside the protected page/layout and every Server Action. If middleware proves flaky in your setup, drop it and rely solely on per‑page/per‑action checks.
+> **Security note:** `getSessionCookie` only checks that a cookie _exists_; it does **not** validate it, and it has known edge cases in some Next/Bun versions. Treat middleware purely as a UX redirect. The real gate is the `auth.api.getSession` check inside the protected page/layout and every Server Action. If middleware proves flaky in your setup, drop it and rely solely on per‑page/per‑action checks.
 
 ---
 
 ## 8. Authorization
 
-| Action | Auth required | Ownership / visibility check | On failure |
-|---|---|---|---|
-| Create note | Yes | owner = `session.user.id` | redirect to /login |
-| List notes | Yes | `WHERE user_id = session.user.id` | redirect to /login |
-| Open / edit a note | Yes | `note.user_id === session.user.id` | `notFound()` (404, don't reveal existence) |
-| Update note | Yes | same as above | reject |
-| Delete note | Yes | same as above | reject |
-| Share / Unshare | Yes | same as above | reject |
-| View public note | **No** | `note.is_public === 1` (looked up by `public_id`) | `notFound()` |
+| Action             | Auth required | Ownership / visibility check                      | On failure                                 |
+| ------------------ | ------------- | ------------------------------------------------- | ------------------------------------------ |
+| Create note        | Yes           | owner = `session.user.id`                         | redirect to /login                         |
+| List notes         | Yes           | `WHERE user_id = session.user.id`                 | redirect to /login                         |
+| Open / edit a note | Yes           | `note.user_id === session.user.id`                | `notFound()` (404, don't reveal existence) |
+| Update note        | Yes           | same as above                                     | reject                                     |
+| Delete note        | Yes           | same as above                                     | reject                                     |
+| Share / Unshare    | Yes           | same as above                                     | reject                                     |
+| View public note   | **No**        | `note.is_public === 1` (looked up by `public_id`) | `notFound()`                               |
 
 Return **404** rather than 403 for non‑owned notes so the app doesn't confirm that an id exists.
 
@@ -345,16 +351,16 @@ Return **404** rather than 403 for non‑owned notes so the app doesn't confirm 
 
 Everything you need is in **StarterKit**. Configure heading levels and **disable the extensions you don't expose** — this constrains the document schema to your whitelist, which also tightens the rendering/XSS surface (§14.1).
 
-| Feature | TipTap node/mark | Toolbar command |
-|---|---|---|
-| Bold | `bold` (mark) | `toggleBold()` |
-| Italic | `italic` (mark) | `toggleItalic()` |
-| Headings H1–H3 | `heading` (node), `levels: [1,2,3]` | `toggleHeading({ level })` |
-| Normal text | `paragraph` (node) | `setParagraph()` |
-| Inline code | `code` (mark) | `toggleCode()` |
-| Code block | `codeBlock` (node) | `toggleCodeBlock()` |
-| Bullet list | `bulletList` + `listItem` (nodes) | `toggleBulletList()` |
-| Horizontal rule | `horizontalRule` (node) | `setHorizontalRule()` |
+| Feature         | TipTap node/mark                    | Toolbar command            |
+| --------------- | ----------------------------------- | -------------------------- |
+| Bold            | `bold` (mark)                       | `toggleBold()`             |
+| Italic          | `italic` (mark)                     | `toggleItalic()`           |
+| Headings H1–H3  | `heading` (node), `levels: [1,2,3]` | `toggleHeading({ level })` |
+| Normal text     | `paragraph` (node)                  | `setParagraph()`           |
+| Inline code     | `code` (mark)                       | `toggleCode()`             |
+| Code block      | `codeBlock` (node)                  | `toggleCodeBlock()`        |
+| Bullet list     | `bulletList` + `listItem` (nodes)   | `toggleBulletList()`       |
+| Horizontal rule | `horizontalRule` (node)             | `setHorizontalRule()`      |
 
 ```ts
 // lib/tiptap.ts  — single source of truth for editor AND server renderer
@@ -386,13 +392,13 @@ export function NoteEditor({
   initialContent,
   onChange,
 }: {
-  initialContent: object;                 // parsed TipTap JSON
+  initialContent: object; // parsed TipTap JSON
   onChange: (json: object) => void;
 }) {
   const editor = useEditor({
     extensions,
     content: initialContent,
-    immediatelyRender: false,             // REQUIRED under SSR/Next.js
+    immediatelyRender: false, // REQUIRED under SSR/Next.js
     editorProps: { attributes: { class: "prose max-w-none focus:outline-none" } },
     onUpdate: ({ editor }) => onChange(editor.getJSON()),
   });
@@ -417,7 +423,7 @@ Each button calls a chained command and reflects active state:
 
 ```ts
 editor.chain().focus().toggleBold().run();
-editor.isActive("bold");                       // → highlight the button
+editor.isActive("bold"); // → highlight the button
 editor.isActive("heading", { level: 2 });
 editor.can().chain().focus().toggleBold().run(); // → enable/disable
 ```
@@ -451,9 +457,11 @@ import { renderToReactElement } from "@tiptap/static-renderer/pm/react";
 import { extensions } from "@/lib/tiptap";
 import { getPublicNote } from "@/lib/notes";
 
-export default async function PublicNotePage(
-  { params }: { params: Promise<{ publicId: string }> },
-) {
+export default async function PublicNotePage({
+  params,
+}: {
+  params: Promise<{ publicId: string }>;
+}) {
   const { publicId } = await params;
   const note = getPublicNote(publicId);
   if (!note) notFound();
@@ -473,15 +481,15 @@ export default async function PublicNotePage(
 
 ## 11. Routes & Pages
 
-| Path | Access | Render strategy | Purpose |
-|---|---|---|---|
-| `/` | public | server redirect | → `/notes` if authed, else `/login` |
-| `/login` | public (redirect away if authed) | client form | sign in |
-| `/signup` | public (redirect away if authed) | client form | sign up |
-| `/notes` | protected | Server Component (list) | dashboard listing the user's notes; "new note" entry point |
-| `/notes/[id]` | protected, owner | Server Component shell + client editor | view/edit one note |
-| `/share/[publicId]` | public | Server Component (static render) | read‑only shared note |
-| `/api/auth/[...all]` | n/a | better-auth handler | all auth endpoints |
+| Path                 | Access                           | Render strategy                        | Purpose                                                    |
+| -------------------- | -------------------------------- | -------------------------------------- | ---------------------------------------------------------- |
+| `/`                  | public                           | server redirect                        | → `/notes` if authed, else `/login`                        |
+| `/login`             | public (redirect away if authed) | client form                            | sign in                                                    |
+| `/signup`            | public (redirect away if authed) | client form                            | sign up                                                    |
+| `/notes`             | protected                        | Server Component (list)                | dashboard listing the user's notes; "new note" entry point |
+| `/notes/[id]`        | protected, owner                 | Server Component shell + client editor | view/edit one note                                         |
+| `/share/[publicId]`  | public                           | Server Component (static render)       | read‑only shared note                                      |
+| `/api/auth/[...all]` | n/a                              | better-auth handler                    | all auth endpoints                                         |
 
 ---
 
@@ -505,11 +513,24 @@ async function requireUserId() {
   return session.user.id;
 }
 
-export async function createNote(): Promise<{ id: string }> { /* insert empty doc, return id */ }
-export async function updateNote(id: string, input: { title?: string; content: unknown }): Promise<void> { /* validate + UPDATE */ }
-export async function deleteNote(id: string): Promise<void> { /* ownership → DELETE */ }
-export async function shareNote(id: string): Promise<{ url: string }> { /* ensure public_id, set is_public=1 */ }
-export async function unshareNote(id: string): Promise<void> { /* set is_public=0 */ }
+export async function createNote(): Promise<{ id: string }> {
+  /* insert empty doc, return id */
+}
+export async function updateNote(
+  id: string,
+  input: { title?: string; content: unknown },
+): Promise<void> {
+  /* validate + UPDATE */
+}
+export async function deleteNote(id: string): Promise<void> {
+  /* ownership → DELETE */
+}
+export async function shareNote(id: string): Promise<{ url: string }> {
+  /* ensure public_id, set is_public=1 */
+}
+export async function unshareNote(id: string): Promise<void> {
+  /* set is_public=0 */
+}
 // optional: rotateShareLink(id) → regenerate public_id
 ```
 
@@ -579,6 +600,7 @@ Setup order:
 4. `bun --bun next dev`.
 
 Notes:
+
 - Keep the `data/` directory out of version control.
 - Tailwind v4 is CSS‑first: import Tailwind and the typography plugin from your global stylesheet rather than a JS config.
 

@@ -35,9 +35,7 @@ export const auth = betterAuth({
     // `request` is undefined during init and server-side auth.api calls.
     if (IS_PROD || !request) return [BASE_ORIGIN];
     const origin = request.headers.get("origin");
-    return origin && isPrivateDevOrigin(origin)
-      ? [BASE_ORIGIN, origin]
-      : [BASE_ORIGIN];
+    return origin && isPrivateDevOrigin(origin) ? [BASE_ORIGIN, origin] : [BASE_ORIGIN];
   },
   plugins: [nextCookies()], // MUST be last; forwards cookies set in Server Actions
 });
