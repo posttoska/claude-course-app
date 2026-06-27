@@ -1,0 +1,50 @@
+RALPH LOOP — AGENT PROGRESS
+===========================
+
+Project: note-taking app (Next.js 16 + Bun + bun:sqlite + better-auth + TipTap).
+Source of truth: SPEC.MD (design) + CLAUDE.md (conventions). Task list: prd.json.
+State note: repo was reset to a bare Next.js skeleton ("reset to default skeleton
+for ralph loop experiment"), so CLAUDE.md's "auth + DB foundation done" no longer
+holds — every prd task starts from scratch. Building bottom-up: db -> auth -> data
+layer -> actions -> UI -> tests.
+
+--------------------------------------------------------------------------------
+DONE
+--------------------------------------------------------------------------------
+
+[database] Build database access utilities (lib/db.ts)  — passes=true
+  - Created lib/db.ts: shared SQLite handle + typed helpers.
+  - Singleton getDb() (lazy open, cached) with WAL + foreign_keys pragmas.
+  - query<T>(sql, params) -> rows; get<T>(sql, params) -> row|null;
+    run(sql, params) -> { changes, lastInsertRowid } (normalized to numbers).
+  - Prepared-statement cache; all SQL parameterized via $name binds.
+  - closeDb() for test isolation.
+  - DESIGN DECISION (spec-sanctioned, SPEC §3.2/§17): thin driver abstraction.
+    Uses bun:sqlite under Bun (dev/build/start run with --bun) and falls back to
+    node:sqlite (DatabaseSync) under plain Node, so the data layer is testable
+    under Vitest (which runs on Node) without breaking production. Driver picked
+    at runtime via createRequire + a variable module specifier (bundler-safe).
+  - Verified: dual-runtime smoke test (Bun + Node, all asserts pass), tsc via
+    `bun run build` (OK), `bun run lint` (clean).
+
+--------------------------------------------------------------------------------
+CHECKS STATUS (whole repo)
+--------------------------------------------------------------------------------
+  bun run build     : PASS
+  bun run lint      : PASS
+  bun run test      : N/A yet — vitest not configured, 0 test files (prd task
+                      "Set up Vitest configuration" is still pending).
+  bun run test:e2e  : N/A yet — no script; Playwright not installed (prd task
+                      "Set up Playwright for E2E testing" is still pending).
+
+--------------------------------------------------------------------------------
+NEXT / NOTES FOR FUTURE ITERATIONS
+--------------------------------------------------------------------------------
+  - Suggested next: notes table schema (prd "Create notes table with indexes")
+    and better-auth config (prd "Configure better-auth server"), both of which
+    import the shared handle from lib/db.ts.
+  - lib/db.ts deliberately does NOT create any tables (that's per-table tasks):
+    notes schema -> its own task; auth tables -> better-auth migrations.
+  - When wiring tables, follow SPEC §5 (notes columns) and reuse getDb()/run().
+  - Vitest will run under Node, so keep server data code driver-agnostic (the
+    node:sqlite fallback in lib/db.ts already handles this).

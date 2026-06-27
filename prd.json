@@ -35,7 +35,7 @@
       "Create run() for INSERT/UPDATE/DELETE",
       "Test utilities with sample queries"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",
