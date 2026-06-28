@@ -364,6 +364,37 @@ DONE
     app/authenticate/page.tsx (toggles SignUpForm/LoginForm, redirects to
     /dashboard on success) -> Header (server, getSession) + LogoutButton.
 
+[ui] Build login form component — passes=true
+  - Created components/LoginForm.tsx: "use client" controlled form, a near-mirror
+    of SignUpForm (same Tailwind styling, a11y, error region, pending handling)
+    but WITHOUT the name field and signing in via signIn.email({ email, password })
+    from @/lib/auth-client. Same `{ error }` return-shape handling.
+  - COMPONENT API: props `{ onSuccess?: () => void }`. Per prd step "Handle success
+    (will redirect in parent)" the form does NOT navigate itself — calls onSuccess;
+    the parent (app/authenticate, next task) owns the /dashboard redirect. Flagging
+    so a future iter doesn't add router.push here.
+  - CLIENT-SIDE VALIDATION (fast feedback only; server authoritative, SPEC §13):
+    email matches the same pragmatic regex as SignUpForm, password non-empty (no
+    min-length on LOGIN — length is a sign-up rule; an existing account's password
+    is whatever it is, and the server rejects wrong creds anyway). On failure sets
+    an inline error and returns BEFORE the server call. Server errors surfaced from
+    error.message into the same <p role="alert"> region.
+  - A11y: semantic <form>, <label htmlFor>/id pairs, autoComplete email +
+    current-password (vs SignUpForm's new-password), required, role="alert",
+    inputs+button disabled while pending ("Signing in…"), noValidate.
+  - VERIFIED with Playwright MCP against the LIVE dev server (:3000): drove a TEMP
+    host route app/login-smoke/page.tsx (<LoginForm onSuccess={() => show
+    "LOGIN_OK"} />), then REMOVED it (deliverable is just the component). Seeded a
+    real user via POST /api/auth/sign-up/email first. Checks: (1) renders Email/
+    Password/Log in; (2) invalid email -> inline alert "Please enter a valid email
+    address." (no server call); (3) VALID creds -> real better-auth sign-in
+    succeeds -> onSuccess fires -> "LOGIN_OK" rendered, 0 console errors; (4) WRONG
+    password -> server error surfaced inline "Invalid email or password" (the only
+    console error is the expected 401 network response, not a code bug).
+    `bun run build` PASS (3 routes after temp removal), `bun run lint` PASS.
+  - NEXT: app/authenticate/page.tsx (toggles SignUpForm/LoginForm, redirects to
+    /dashboard on success) -> Header (server, getSession) + LogoutButton.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

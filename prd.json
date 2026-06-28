@@ -178,7 +178,7 @@
       "Display error messages on failure",
       "Handle success (will redirect in parent)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
