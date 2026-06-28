@@ -79,6 +79,32 @@ DONE
     rejects NULL). Adversarial 3-lens review (compliance/robustness/invariants)
     all voted "ship", nits only. `bun run build` PASS, `bun run lint` PASS.
 
+[database] Define Note type and create helper functions (lib/notes.ts) — passes=true
+  - Created lib/notes.ts: the data-layer boundary that maps raw `notes` rows to
+    the app-level Note. Scoped to THIS task (types + helpers); the repository
+    query/mutation fns (createNote/getNoteById/.../setNotePublic) are later tasks
+    and will be appended to this same file.
+  - `Note` type: camelCase (userId/contentJson/isPublic/publicSlug/createdAt/
+    updatedAt). `contentJson` is the PARSED TipTap doc object (typed JSONContent
+    from @tiptap/core, type-only import — erased at compile, no client coupling),
+    not the stored string. `isPublic` is a real boolean. title/publicSlug nullable.
+  - `NoteRow` type: the raw snake_case SQLite shape (content_json: string,
+    is_public: 0|1) — matches lib/db.ts's `notes` schema exactly.
+  - `mapRowToNote(row)`: snake->camel, is_public 0/1 -> boolean, JSON.parse of
+    content_json -> object.
+  - `EMPTY_TIPTAP_DOC`: { type:"doc", content:[{ type:"paragraph" }] } (SPEC §9.2);
+    deep-frozen so the shared constant can't be mutated — clone before editing.
+  - `generatePublicSlug()`: nanoid(21) — URL-safe, high-entropy, unguessable
+    (SPEC §10.1/§14.5; prd asked for nanoid 16+ chars, 21 exceeds it).
+  - DEP: promoted `nanoid` from a transitive dep to a DIRECT dependency
+    (`bun add nanoid` -> nanoid@5.1.16, ESM; works under Bun + Node/Vitest).
+  - DESIGN: did NOT add `import "server-only"` (package not installed AND it
+    throws when imported under plain Node, which would break the Vitest tests
+    that import this module — consistent with lib/db.ts's node:sqlite fallback).
+  - VERIFIED: 12-assert Bun smoke test (doc shape + frozen, slug length 21 /
+    url-safe / unique, full row->Note mapping incl. 0->false). `bun run build`
+    PASS (typechecks), `bun run lint` PASS.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

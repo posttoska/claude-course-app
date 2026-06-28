@@ -47,7 +47,7 @@
       "Create default empty TipTap JSON constant",
       "Export all types and helpers"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",

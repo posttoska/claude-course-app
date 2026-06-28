@@ -1,0 +1,74 @@
+// Server-only data layer for the `notes` table: the canonical `Note` shape, the
+// row -> Note mapper, the share-token generator, and the default empty document.
+//
+// The DB stores notes with snake_case columns and content as a JSON *string*
+// (TipTap/ProseMirror doc, never raw HTML — SPEC §5.3, §14.1). This module is
+// the boundary that maps those raw rows into the camelCase `Note` the rest of
+// the app consumes, parsing `content_json` back into an object along the way.
+//
+// NOTE: kept driver-agnostic and free of `server-only` so the data layer stays
+// importable under the Vitest (Node) test runner — see lib/db.ts for the same
+// rationale. The repository query/mutation functions are added in later phases.
+
+import { nanoid } from "nanoid";
+import type { JSONContent } from "@tiptap/core";
+
+/** A note as the rest of the app consumes it: camelCase, `contentJson` parsed. */
+export type Note = {
+  id: string;
+  userId: string;
+  title: string | null;
+  contentJson: JSONContent;
+  isPublic: boolean;
+  publicSlug: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** The raw `notes` row as stored in SQLite: snake_case, content stringified, 0/1 booleans. */
+export type NoteRow = {
+  id: string;
+  user_id: string;
+  title: string | null;
+  content_json: string;
+  is_public: number;
+  public_slug: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Default content for a brand-new note: an empty ProseMirror document with a
+ * single empty paragraph (SPEC §9.2). Deep-frozen so the shared constant can't
+ * be mutated by accident — clone it (e.g. `structuredClone`) before editing.
+ */
+export const EMPTY_TIPTAP_DOC: JSONContent = Object.freeze({
+  type: "doc",
+  content: Object.freeze([Object.freeze({ type: "paragraph" })]),
+}) as JSONContent;
+
+/** Public share-token length. nanoid's default alphabet is URL-safe; 21 chars is high-entropy and unguessable (SPEC §10.1, §14.5). */
+const PUBLIC_SLUG_SIZE = 21;
+
+/** Generate a high-entropy, URL-safe public share slug (nanoid, 21 chars). */
+export function generatePublicSlug(): string {
+  return nanoid(PUBLIC_SLUG_SIZE);
+}
+
+/**
+ * Map a raw `notes` row to a `Note`: snake_case -> camelCase, `is_public` 0/1 ->
+ * boolean, and `content_json` parsed from its stored JSON string back into an
+ * object (SPEC §5.3).
+ */
+export function mapRowToNote(row: NoteRow): Note {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    contentJson: JSON.parse(row.content_json) as JSONContent,
+    isPublic: row.is_public === 1,
+    publicSlug: row.public_slug,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
