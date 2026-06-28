@@ -195,3 +195,20 @@ export function updateNote(userId: string, noteId: string, data: UpdateNoteInput
   // the WHERE matched nothing — not found or not owned).
   return getNoteById(userId, noteId);
 }
+
+/**
+ * Delete a note owned by `userId`, returning whether a row was removed (SPEC §8,
+ * §12 delete flow).
+ *
+ * Ownership is enforced in the WHERE clause (`user_id = $userId`), so deleting a
+ * missing or someone-else's note simply affects 0 rows and returns `false` — it
+ * never reveals whether the id exists (the 404-not-403 story, SPEC §14.2). The
+ * DELETE is parameterized ($name binds).
+ */
+export function deleteNote(userId: string, noteId: string): boolean {
+  const { changes } = run("DELETE FROM notes WHERE id = $id AND user_id = $userId", {
+    $id: noteId,
+    $userId: userId,
+  });
+  return changes > 0;
+}

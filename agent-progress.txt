@@ -186,6 +186,22 @@ DONE
     mangled page.tsx, but a re-run against the on-disk (valid) file PASSED. If a
     future build fails on app/page.tsx JSX, re-run; the file itself is fine.
 
+[database] Implement deleteNote function — passes=true
+  - Appended deleteNote() to lib/notes.ts (sync, per the repo-fn convention:
+    reads/update/delete stay sync; the actions layer wraps them). Reuses `run`
+    from the existing lib/db import — no new imports.
+  - Signature: deleteNote(userId, noteId): boolean. Single parameterized DELETE
+    WHERE id=$id AND user_id=$userId; returns run().changes > 0.
+  - AUTHZ baked into WHERE (mirrors updateNote): a missing or someone-else's note
+    deletes 0 rows -> returns false, never revealing existence (404-not-403 story,
+    SPEC §8/§14.2). Idempotent — re-deleting an already-gone note returns false,
+    no throw.
+  - VERIFIED: 6-assert throwaway Bun smoke test (DATABASE_PATH=:memory:, stub
+    `user` table + alice/bob). Covers: non-owner delete -> false + note untouched,
+    missing id -> false, owner delete -> true + note gone (getNoteById null),
+    re-delete -> false. 6/6 pass. Smoke file removed.
+    `bun run build` PASS (typechecks), `bun run lint` PASS (clean).
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
@@ -203,9 +219,7 @@ CHECKS STATUS (whole repo)
 NEXT / NOTES FOR FUTURE ITERATIONS
 --------------------------------------------------------------------------------
   - Suggested next (in rough dependency order):
-      1. "Implement deleteNote function" — DELETE WHERE id=$id AND user_id=$uid,
-         return run().changes > 0 (boolean). Sync, mirrors updateNote's authz.
-      2. "Implement note sharing functions" — setNotePublic(userId, noteId,
+      1. "Implement note sharing functions" — setNotePublic(userId, noteId,
          isPublic): on enable, generatePublicSlug() if public_slug is NULL + set
          is_public=1; on disable, set is_public=0 (KEEP the slug, SPEC §10.2).
          getNoteByPublicSlug(slug): SELECT ... WHERE public_slug=$s AND is_public=1

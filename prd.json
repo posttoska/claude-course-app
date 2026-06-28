@@ -95,7 +95,7 @@
       "Return boolean indicating success",
       "Test authorization check works"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",
