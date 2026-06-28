@@ -215,7 +215,7 @@
       "Add to Header component",
       "Test logout clears session"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "actions",

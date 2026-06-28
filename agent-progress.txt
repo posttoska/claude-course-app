@@ -592,6 +592,38 @@ DONE
     delete/share, the /p/[slug] public viewer (@tiptap/static-renderer — NOT yet
     installed), landing/styling/responsive, then Vitest + Playwright test setup.
 
+[ui] Implement logout functionality — passes=true
+  - Created components/LogoutButton.tsx: "use client" leaf component. Built it
+    FIRST (leaf-first) because the Header task depends on it ("Show ... Logout
+    button"); Header consumes this component next iteration. Mirrors the existing
+    auth-UI conventions (pending state via useState, useRouter from next/
+    navigation, foreground/background theme tokens, rounded-md/text-sm styling).
+  - BEHAVIOR: onClick -> signOut() (from @/lib/auth-client) -> router.push("/") +
+    router.refresh(). signOut clears the session cookie (better-auth nextCookies
+    plugin); refresh() makes server components re-read the cleared cookie. Button
+    disables + shows "Logging out…" while pending. Redirect target is "/" per prd
+    ("Redirect to / after logout") — NOT /authenticate.
+  - DEFERRED sub-step "Add to Header component": Header doesn't exist yet (separate
+    prd task, still passes=false). The COMPONENT is the deliverable here and is
+    complete + verified standalone; the Header task will import it. Flagging so a
+    future iter doesn't think LogoutButton is unfinished — same pattern as the
+    forms' "redirect in parent" deferral.
+  - VERIFIED with Playwright MCP against the LIVE dev server (:3000) via a TEMP
+    host route app/logout-smoke/page.tsx (showed live useSession() status +
+    rendered <LogoutButton/>), then REMOVED it (deliverable is just the component).
+    Flow: signed up a fresh user (ralph-logout-0628@example.com) -> /logout-smoke
+    showed "signed-in:ralph-logout-0628@example.com" -> clicked "Log out" ->
+    redirected to "/" (URL became /, 0 console errors) -> re-navigated to
+    /logout-smoke -> "signed-out" (cookie cleared, session gone). All 3 prd-
+    testable steps confirmed (signOut called, redirect to /, session cleared).
+  - NOTE: the smoke signup wrote a user row to dev DB data/app.sqlite (gitignored)
+    via a throwaway unique email. Harmless.
+  - `bun run build` PASS (4 routes after temp removal — component not yet imported
+    into any route so graph unchanged), `bun run lint` PASS (clean).
+  - NEXT: Header (server component, getSession()) — show app name/home link,
+    Login/Sign up when logged out, Dashboard link + <LogoutButton/> when logged
+    in; add to app/layout.tsx. Then dashboard page + NoteList + CreateNoteButton.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
