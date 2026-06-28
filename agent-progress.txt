@@ -788,6 +788,52 @@ DONE
     will make the CreateNoteButton's navigation target real. Then /p/[slug] public
     viewer + landing/styling/responsive, then the Vitest/Playwright test-setup tasks.
 
+[ui] Create loading and error states for dashboard — passes=true
+  (COMPLETES the dashboard cluster. Chose this clean, self-contained, no-new-dep
+  task over the riskier TipTap editor cluster — it finishes /dashboard before the
+  frontier moves to /notes/[id]. Two segment files, no new routes.)
+  - app/dashboard/loading.tsx: Server Component skeleton shown via Suspense while
+    the dynamic, DB-backed dashboard awaits requireAuth() + getNotesByUser(). Mirrors
+    page.tsx/NoteList layout EXACTLY (mx-auto max-w-5xl px-4 py-10 sm:px-6 header +
+    grid gap-3 sm:grid-cols-2 lg:grid-cols-3) so there's no layout shift on load:
+    header has title/subtitle/"New note"-button placeholders; 6 card skeletons each
+    with a title bar + footer (date + badge) placeholder. animate-pulse on black/[.0x]
+    (dark white/[.0x]) blocks; aria-busy="true" + an sr-only "Loading your notes…".
+  - app/dashboard/error.tsx: the segment error boundary. MUST be "use client" and
+    receive { error, reset } (Next App Router contract). Renders a red-bordered alert
+    card (role="alert") — "Something went wrong" + generic "We couldn't load your
+    notes. Please try again." (no internals leaked) — with a "Try again" <button> that
+    calls reset() to re-render the segment. Logs the real error to console via
+    useEffect for diagnostics. Same max-w-5xl shell + foreground/background theme
+    tokens, dark-mode aware. (apos-escaped "couldn't" for the lint/react rule.)
+  - SCOPE: loading/error are Next.js SEGMENT files (loading.tsx/error.tsx), not
+    routes — they don't change the route count; build stays at 5 routes. They wrap
+    the EXISTING dashboard page; no change to page.tsx/NoteList/CreateNoteButton.
+  - VERIFIED with Playwright MCP against the live dev server (:3000): (1) REGRESSION —
+    /dashboard (existing session) still renders fine with the new sibling files: "3
+    notes" + all cards/links intact, 0 console errors. (2) BOTH transient states (hard
+    to catch live) rendered via a TEMP client host route app/states-smoke/page.tsx
+    that imported + rendered <DashboardLoading/> and <DashboardError error reset/>,
+    screenshotted (states-smoke.png), then REMOVED the route + png. Screenshot
+    confirmed: loading = header skeleton + 6 pulsing card skeletons in the 3-col grid;
+    error = red alert card with heading + message + black "Try again" button. The ONLY
+    console "issue" was the intentional console.error(error) from the boundary's
+    useEffect — expected diagnostic logging, not a bug. Reset wired to a noop logging
+    "RESET_CLICKED" in the smoke (real reset() re-renders the segment).
+  - `bun run build` PASS (5 routes, /dashboard still ƒ Dynamic; rebuilt clean after
+    temp-route removal), `bun run lint` PASS (clean). test/test:e2e unchanged (see
+    CHECKS STATUS — still the pre-existing "no test files" / no-script state).
+  - NEXT: the dashboard cluster is DONE. Frontier is the /notes/[id] editor cluster
+    (the CreateNoteButton already navigates there → currently 404s): build
+    lib/tiptap.ts (shared extension config — SINGLE SOURCE for editor + static
+    renderer, disable non-whitelisted StarterKit nodes per SPEC §9.1) →
+    app/notes/[id]/page.tsx (RSC: requireAuth + getNoteById → notFound() on
+    missing/non-owned) → components/NoteEditor.tsx ("use client", @tiptap/react,
+    immediatelyRender:false) → toolbar → title input → save (updateNoteAction,
+    debounced) → delete → share (ShareToggle + toggleShareAction). Then /p/[slug]
+    public viewer (@tiptap/static-renderer + @tailwindcss/typography both installed),
+    landing/styling/responsive, then Vitest/Playwright test-setup tasks.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

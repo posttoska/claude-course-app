@@ -309,7 +309,7 @@
       "Add 'Try again' functionality",
       "Style appropriately"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
