@@ -129,39 +129,59 @@ DONE
     Node ESM won't resolve — code is driver-agnostic; Vitest will cover Node.)
     `bun run build` PASS, `bun run lint` PASS. Smoke file removed.
 
+[database] Implement getNoteById and getNotesByUser functions — passes=true
+  - Appended getNoteById() + getNotesByUser() to lib/notes.ts (sync reads, per
+    the repo-fn convention: driver is sync; the actions layer wraps them). Added
+    `get` + `query` to the existing `import { run } from "./db"`.
+  - getNoteById(userId, noteId): SELECT * FROM notes WHERE id=$id AND
+    user_id=$userId -> mapRowToNote(row) or null. Ownership is baked into the
+    WHERE clause, so "not found" and "owned by someone else" are
+    indistinguishable — both null. Callers translate null -> notFound() (404,
+    not 403) so existence isn't revealed (SPEC §8, §14.2).
+  - getNotesByUser(userId): SELECT * FROM notes WHERE user_id=$userId ORDER BY
+    updated_at DESC -> Note[] (rows.map(mapRowToNote)). Scoped to the owner;
+    newest-edited first to drive the dashboard listing.
+  - All SQL parameterized ($id/$userId binds). Reuses get()/query() from lib/db
+    and mapRowToNote() from lib/notes (no new SELECT-and-map duplication).
+  - VERIFIED: 14-assert throwaway Bun smoke test (DATABASE_PATH=:memory:, stub
+    `user` table + alice/bob rows). Covers: owner fetch returns mapped Note
+    (id/title/parsed contentJson/isPublic), AUTHZ — bob gets null for alice's
+    note + missing id gets null, per-user list scoping (alice 2 / bob 1, no
+    cross-leak), empty array for a user with no notes, and ORDER BY updated_at
+    DESC verified deterministically via explicit distinct timestamps (createNote
+    ms-resolution timestamps can tie). 14/14 pass under Bun. Smoke file removed.
+    `bun run build` PASS (typechecks), `bun run lint` PASS.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
   bun run build     : PASS
   bun run lint      : PASS
-  bun run test      : FAIL (expected) — `vitest run` exits 1 with "No test files
-                      found"; no tests authored yet. Pre-existing, not a
-                      regression (prd task "Set up Vitest configuration" pending).
-  bun run test:e2e  : N/A — no test:e2e script; Playwright not installed (prd task
-                      "Set up Playwright for E2E testing" is still pending).
+  bun run test      : FAIL (expected) — vitest IS now installed (test script =
+                      `vitest run`, + jsdom/testing-library in devDeps), but no
+                      *.test/*.spec files exist yet so it exits 1 "No test files
+                      found". Pre-existing, not a regression (prd tasks "Write
+                      unit tests for ..." still pending — they author the files).
+  bun run test:e2e  : N/A — no test:e2e script defined; Playwright not installed
+                      (prd task "Set up Playwright for E2E testing" still pending).
 
 --------------------------------------------------------------------------------
 NEXT / NOTES FOR FUTURE ITERATIONS
 --------------------------------------------------------------------------------
   - Suggested next (in rough dependency order):
-      1. "Implement getNoteById and getNotesByUser functions" — append to
-         lib/notes.ts (sync). getNoteById(userId, noteId): SELECT ... WHERE id=$id
-         AND user_id=$uid -> mapRowToNote or null (authz baked into the WHERE; null
-         => caller does notFound(), SPEC §8). getNotesByUser(userId): SELECT ...
-         WHERE user_id=$uid ORDER BY updated_at DESC -> Note[].
-      2. "Implement updateNote function" — partial title/contentJson, bump
+      1. "Implement updateNote function" — partial title/contentJson, bump
          updated_at = new Date().toISOString(), WHERE id=$id AND user_id=$uid,
          return updated Note or null. Re-SELECT after UPDATE to build the Note.
-      3. "Implement deleteNote function" — DELETE WHERE id=$id AND user_id=$uid,
+      2. "Implement deleteNote function" — DELETE WHERE id=$id AND user_id=$uid,
          return run().changes > 0 (boolean).
-      4. "Implement note sharing functions" — setNotePublic(userId, noteId,
+      3. "Implement note sharing functions" — setNotePublic(userId, noteId,
          isPublic): on enable, generatePublicSlug() if public_slug is NULL + set
          is_public=1; on disable, set is_public=0 (KEEP the slug, SPEC §10.2).
          getNoteByPublicSlug(slug): SELECT ... WHERE public_slug=$s AND is_public=1
          (public route, no userId). NOTE: prd's slug task says "clear public_slug
          when disabling" but SPEC §10.2 says keep it so re-share reuses the link —
          resolve this conflict before implementing (recommend: keep, per SPEC).
-      5. Auth wiring (foundation, needed before any auth UI):
+      4. Auth wiring (foundation, needed before any auth UI):
          - "Create better-auth API route" — app/api/auth/[...all]/route.ts:
            `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
          - "Implement server-side auth helpers" — getSession()/requireAuth()

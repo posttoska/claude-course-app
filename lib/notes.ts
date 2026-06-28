@@ -12,7 +12,7 @@
 
 import { nanoid } from "nanoid";
 import type { JSONContent } from "@tiptap/core";
-import { run } from "./db";
+import { get, query, run } from "./db";
 
 /** A note as the rest of the app consumes it: camelCase, `contentJson` parsed. */
 export type Note = {
@@ -121,4 +121,34 @@ export async function createNote(userId: string, data?: CreateNoteInput): Promis
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/**
+ * Fetch a single note by id, scoped to its owner (SPEC §8 authorization).
+ *
+ * Ownership is enforced in the WHERE clause (`user_id = $userId`), so a note
+ * that doesn't exist and a note owned by someone else are indistinguishable —
+ * both return `null`. Callers translate that `null` into `notFound()` (404, not
+ * 403) so the route never reveals whether an id exists (SPEC §8, §14.2).
+ */
+export function getNoteById(userId: string, noteId: string): Note | null {
+  const row = get<NoteRow>("SELECT * FROM notes WHERE id = $id AND user_id = $userId", {
+    $id: noteId,
+    $userId: userId,
+  });
+  return row ? mapRowToNote(row) : null;
+}
+
+/**
+ * List every note owned by `userId`, newest-edited first (SPEC §6, §11).
+ *
+ * Scoped to `user_id = $userId` so a user only ever sees their own notes, and
+ * ordered by `updated_at DESC` to drive the dashboard listing.
+ */
+export function getNotesByUser(userId: string): Note[] {
+  const rows = query<NoteRow>(
+    "SELECT * FROM notes WHERE user_id = $userId ORDER BY updated_at DESC",
+    { $userId: userId },
+  );
+  return rows.map(mapRowToNote);
 }

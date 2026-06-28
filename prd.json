@@ -72,7 +72,7 @@
       "Order by updated_at DESC",
       "Test authorization is enforced"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",
