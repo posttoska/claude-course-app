@@ -660,6 +660,58 @@ DONE
     dashboard loading/error states. Then the /notes/[id] editor (TipTap, needs
     lib/tiptap.ts) and /p/[slug] public viewer, then the test setup tasks.
 
+[ui] Build dashboard page with RSC data fetching — passes=true
+  (FIRST dashboard-cluster task; the protected /dashboard route, previously a 404
+  that every prior iter's signup smoke hit. Chose it over the routine NoteList/
+  CreateNoteButton presentation tasks per the loop rule "foundation/risky before
+  routine": first time requireAuth() runs in a real protected-PAGE request scope,
+  first getNotesByUser() in an RSC, and first pull of lib/notes -> lib/db into a
+  PAGE bundle — the Turbopack/getBuiltinModule concern. It builds clean.)
+  - Created app/dashboard/page.tsx: async Server Component (SPEC §3.1 reads run in
+    Server Components — no REST API). Guard: `const session = await requireAuth()`
+    (authoritative server-side check; redirects to /authenticate when signed out,
+    its `never` return narrows session to non-null). Then `getNotesByUser(
+    session.user.id)` — scoped to the owner, ORDER BY updated_at DESC.
+  - DISPLAY: renders the list INLINE in the page (server-rendered <ul> of <li>
+    cards, each a <Link href={`/notes/${id}`}>) with title (falls back to
+    "Untitled note" on null/blank), "Updated <date>" (formatUpdatedAt: stable
+    en-GB d-MMM-yyyy; safe in an RSC — output is serialized, not re-run client-
+    side, so no hydration mismatch), and a Public/Private badge. EMPTY STATE: a
+    dashed-border card ("No notes yet" + hint) shown when notes.length === 0;
+    header subtitle switches between "You don't have any notes yet." and "N notes".
+  - SCOPE/prd-wording NOTE: prd step says "Pass notes to client component for
+    display". Rendered the list server-side instead (read-only links need no client
+    JS; SPEC §3.1 favors RSC reads). The NEXT prd task "Create notes list component"
+    (components/NoteList.tsx) will EXTRACT this inline markup into a component and
+    the page will import it — that's the intended page-first-then-extract flow, not
+    a missing piece. Flagging so a future iter doesn't think the page is unfinished.
+    CreateNoteButton is also a separate later task, so no create button here yet.
+  - STYLE: max-w-5xl main, responsive grid (sm:2 / lg:3 cols), foreground/background
+    theme tokens, dark-mode-aware borders/hover, line-clamp-2 titles. Tailwind v4.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), 4 checks:
+    (1) AUTH GATE — logged-out /dashboard redirects to /authenticate (protection
+    works); (2) signed up a fresh user (ralph-dashboard-0628@example.com) -> landed
+    on /dashboard showing the EMPTY STATE ("No notes yet") + Header flipped to
+    Dashboard/Log out; (3) seeded 2 notes for that user via a throwaway bun script
+    (_seed-dashboard.ts, REMOVED after — used createNote x2 + setNotePublic on one,
+    writing to the SAME gitignored dev DB) -> reloaded -> POPULATED list: "2 notes",
+    both cards with correct titles, "Updated 28 Jun 2026", Public + Private badges,
+    correct /notes/<uuid> links, and correct updated_at DESC order (the just-shared
+    "Project ideas" sorts above "Shopping list"); (4) 0 console errors / 0 warnings.
+  - `bun run build` PASS — /dashboard now registered as ƒ (Dynamic) server-rendered
+    on demand (correct: it reads cookies + queries the DB); 5 routes total. Pulling
+    lib/notes -> lib/db into a page bundle built clean (getBuiltinModule driver, as
+    expected — don't revert to a dynamic require). `bun run lint` PASS (clean).
+  - NOTE: signup + seed wrote user/note rows to dev DB data/app.sqlite (gitignored),
+    throwaway unique email. Harmless.
+  - NEXT (dashboard cluster, in order): components/NoteList.tsx (extract the inline
+    card list above into a reusable component, import it into the dashboard page) ->
+    components/CreateNoteButton.tsx ("use client", calls createNoteAction then
+    router.push(`/notes/${id}`)) -> app/dashboard/loading.tsx + error.tsx. Then the
+    /notes/[id] editor (TipTap — needs lib/tiptap.ts, @tiptap/react installed) and
+    /p/[slug] public viewer (@tiptap/static-renderer + @tailwindcss/typography are
+    installed), then the Vitest/Playwright test-setup tasks.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

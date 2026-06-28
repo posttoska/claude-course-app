@@ -274,7 +274,7 @@
       "Pass notes to client component for display",
       "Handle empty state"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
