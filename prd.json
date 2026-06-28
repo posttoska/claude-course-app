@@ -369,7 +369,7 @@
       "Add Horizontal rule button",
       "Test all formatting options work"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

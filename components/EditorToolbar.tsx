@@ -2,10 +2,9 @@
 
 // EditorToolbar — formatting controls for the NoteEditor's TipTap instance
 // (SPEC §9.3). Each button issues a chained command and reflects the editor's
-// current active state. THIS prd task: Bold, Italic, H1–H3, and Paragraph
-// (resets the current block back to normal text). Inline-code / code-block /
-// bullet-list / horizontal-rule buttons are a follow-up prd task that extends
-// this same toolbar.
+// current active state. Whitelist (matches the lib/tiptap extension set): Bold,
+// Italic, H1–H3, Paragraph (resets the current block to normal text), Inline
+// code, Code block, Bullet list, and Horizontal rule.
 //
 // REACTIVITY (the crux): in @tiptap/react v3 the editor state is NOT
 // auto-reactive — a deliberate perf choice — so a plain read of
@@ -69,6 +68,15 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
       isH2: editor.isActive("heading", { level: 2 }),
       isH3: editor.isActive("heading", { level: 3 }),
       isParagraph: editor.isActive("paragraph"),
+      isCode: editor.isActive("code"),
+      canCode: editor.can().chain().focus().toggleCode().run(),
+      isCodeBlock: editor.isActive("codeBlock"),
+      canCodeBlock: editor.can().chain().focus().toggleCodeBlock().run(),
+      isBulletList: editor.isActive("bulletList"),
+      canBulletList: editor.can().chain().focus().toggleBulletList().run(),
+      // Horizontal rule is an insert, not a toggle — no active state, just
+      // whether it can be inserted at the current selection.
+      canHorizontalRule: editor.can().chain().focus().setHorizontalRule().run(),
     }),
   });
 
@@ -124,6 +132,43 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
         onClick={() => editor.chain().focus().setParagraph().run()}
       >
         ¶
+      </ToolbarButton>
+
+      <ToolbarDivider />
+
+      <ToolbarButton
+        label="Inline code"
+        isActive={state.isCode}
+        disabled={!state.canCode}
+        onClick={() => editor.chain().focus().toggleCode().run()}
+      >
+        <span className="font-mono text-xs">{"</>"}</span>
+      </ToolbarButton>
+      <ToolbarButton
+        label="Code block"
+        isActive={state.isCodeBlock}
+        disabled={!state.canCodeBlock}
+        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+      >
+        <span className="font-mono text-xs">{"{ }"}</span>
+      </ToolbarButton>
+
+      <ToolbarDivider />
+
+      <ToolbarButton
+        label="Bullet list"
+        isActive={state.isBulletList}
+        disabled={!state.canBulletList}
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+      >
+        <span className="leading-none tracking-tighter">•≡</span>
+      </ToolbarButton>
+      <ToolbarButton
+        label="Horizontal rule"
+        disabled={!state.canHorizontalRule}
+        onClick={() => editor.chain().focus().setHorizontalRule().run()}
+      >
+        —
       </ToolbarButton>
     </div>
   );
