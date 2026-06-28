@@ -10,6 +10,7 @@
 import { requireAuth } from "@/lib/auth";
 import { getNotesByUser } from "@/lib/notes";
 import { NoteList } from "@/components/NoteList";
+import { CreateNoteButton } from "@/components/CreateNoteButton";
 
 export default async function DashboardPage() {
   const session = await requireAuth();
@@ -26,6 +27,7 @@ export default async function DashboardPage() {
               : `${notes.length} note${notes.length === 1 ? "" : "s"}`}
           </p>
         </div>
+        <CreateNoteButton />
       </header>
 
       <NoteList notes={notes} />

@@ -746,6 +746,48 @@ DONE
     needs lib/tiptap.ts; @tiptap/react installed) + /p/[slug] public viewer, then
     the Vitest/Playwright test-setup tasks.
 
+[ui] Add create note button to dashboard — passes=true
+  - Created components/CreateNoteButton.tsx ("use client") and wired it into the
+    app/dashboard/page.tsx header (right of the "Your notes"/count column). This is
+    the next dashboard-cluster dependency the NoteList iter flagged. The data +
+    actions layers are complete, so this is straightforward UI consuming an existing
+    action — no new risky integration.
+  - BEHAVIOR: onClick -> createNoteAction() (no input -> repo applies defaults
+    "Untitled note" + empty TipTap doc) -> on ok, router.push(`/notes/${id}`) +
+    router.refresh(); on error surfaces result.error in a role="alert" and re-enables.
+    Keeps `pending` true THROUGH the navigation so the button stays "Creating…"/
+    disabled until the editor page takes over (no flash back to idle).
+  - DECISION: consumes the action's ActionResult (getSession-based, returns an error
+    result for the unauthenticated case) rather than throwing — consistent with the
+    auth-UI forms. The button is a client island; the auth check + INSERT stay
+    server-side in createNoteAction. Mirrors the LogoutButton conventions (useState
+    pending, useRouter, foreground/background theme tokens). Used the inverted
+    bg-foreground/text-background style to read as the primary CTA vs the outlined
+    Log out button.
+  - KNOWN-OK: clicking navigates to /notes/[id], which 404s for now — the editor
+    page is a later prd task ("Build note editor page with RSC", passes=false). The
+    navigation itself is correct; the 404 is expected until that page exists. Same
+    deferral pattern as the dashboard/Header links before their targets were built.
+    Flagging so a future iter doesn't think CreateNoteButton is broken.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), existing
+    session: /dashboard showed "2 notes" + the "New note" button in the header.
+    Clicked it -> URL changed to /notes/<new-uuid> (e2adfa59-…), proving
+    createNoteAction ran + the post-create navigation works. The ONLY console error
+    is the expected 404 for that not-yet-built editor route (confirmed via
+    console_messages — it's the /notes/<uuid> resource 404, not a code bug).
+    Navigated back to /dashboard -> "3 notes", and the new note renders at the TOP
+    (updated_at DESC) as "Untitled note" / Private with the SAME uuid in its
+    /notes/<uuid> link — confirms the row actually persisted with the repo defaults.
+  - NOTE: the click wrote a 3rd note row to the dev DB data/app.sqlite (gitignored).
+    Harmless throwaway.
+  - `bun run build` PASS (5 routes, /dashboard still ƒ Dynamic; CreateNoteButton
+    bundles into the dashboard page as a client component), `bun run lint` PASS.
+  - NEXT (dashboard cluster, last task): app/dashboard/loading.tsx (skeleton) +
+    app/dashboard/error.tsx (error boundary + "Try again"). Then the /notes/[id]
+    editor cluster (TipTap — needs lib/tiptap.ts; @tiptap/react installed) which
+    will make the CreateNoteButton's navigation target real. Then /p/[slug] public
+    viewer + landing/styling/responsive, then the Vitest/Playwright test-setup tasks.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
