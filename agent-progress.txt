@@ -12,6 +12,26 @@ layer -> actions -> UI -> tests.
 DONE
 --------------------------------------------------------------------------------
 
+[database] Create SQLite database with better-auth schema — passes=true
+  - VERIFY-ONLY task (no new code): the full schema is already created on cold
+    start. lib/db.ts's openDatabase() mkdir's data/ + opens app.sqlite + creates
+    the `notes` table; importing lib/auth.ts runs better-auth's migrations
+    (getMigrations -> runMigrations) which create user/session/account/
+    verification. This task just confirms it and flips passes=true. COMPLETES the
+    `database` category (all 9 db tasks now passes=true).
+  - VERIFIED: throwaway bun script (_verify-schema.ts, removed after) imported
+    lib/auth (triggering the real migration path), then inspected the live DB via
+    sqlite_master + PRAGMA table_info/foreign_key_list. ALL CHECKS PASS:
+      * 5 tables present: user, session, account, verification, notes.
+      * user cols: id, name, email, emailVerified, image, createdAt, updatedAt.
+      * session cols incl. userId + token + expiresAt; session.userId -> user FK.
+      * account (credential provider) cols incl. userId, providerId, accountId,
+        password (hash lives here, never in user — SPEC §5.1).
+      * verification cols: id, identifier, value, expiresAt.
+      * notes.user_id -> user FK present.
+    `bun run build` PASS (4 routes), `bun run lint` PASS (clean).
+  - No UI -> Playwright N/A. test/test:e2e unchanged (still pending prd tasks).
+
 [database] Build database access utilities (lib/db.ts)  — passes=true
   - Created lib/db.ts: shared SQLite handle + typed helpers.
   - Singleton getDb() (lazy open, cached) with WAL + foreign_keys pragmas.
@@ -324,29 +344,34 @@ CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
 NEXT / NOTES FOR FUTURE ITERATIONS
 --------------------------------------------------------------------------------
-  - DATA LAYER (lib/notes.ts) COMPLETE: full repository surface (create/getById/
-    getByUser/update/delete/setNotePublic/getNoteByPublicSlug) + types/helpers.
-    The only remaining `database`-category prd task is "Create SQLite database
-    with better-auth schema" (passes=false) — now trivially satisfiable: cold
-    start already creates user/session/account/verification (auth migrations) +
-    notes (lib/db.ts); just verify the tables exist and flip it. Next phases are
-    auth wiring -> actions -> UI -> tests.
+  - DATABASE CATEGORY FULLY COMPLETE (all 9 db tasks passes=true): data layer
+    (lib/notes.ts) full repository surface (create/getById/getByUser/update/
+    delete/setNotePublic/getNoteByPublicSlug) + types/helpers, AND the schema
+    task (verified this iter — user/session/account/verification + notes all
+    created on cold start). AUTH CATEGORY ALSO COMPLETE (server, route, helpers,
+    client all passes=true). Next phases: auth UI -> actions -> CRUD/editor/share
+    UI -> tests.
   - AUTH ROUTE DONE this iter (app/api/auth/[...all]/route.ts) — endpoints live
     and verified. Remember the Turbopack lesson: any NEW route/page that imports
     lib/db (directly or via lib/auth) must build clean; the getBuiltinModule
     driver load already handles that, so don't "fix" it back to a dynamic require.
-  - Suggested next (in rough dependency order):
-      1. "Create SQLite database with better-auth schema" — verify-only: cold
-         start already creates user/session/account/verification (auth
-         migrations) + notes (lib/db.ts). The POST sign-up smoke proved the auth
-         tables exist + accept writes; just confirm + flip passes=true.
-      2. "Create auth client for frontend" — lib/auth-client.ts
-         (createAuthClient from better-auth/react; export signIn/signUp/signOut/
-         useSession). Last bit of auth foundation before the auth UI forms.
-      3. THEN auth UI (SignUpForm/LoginForm -> app/authenticate page -> Header/
-         LogoutButton). Server helpers are DONE: getSession()/requireAuth() live
-         in lib/auth.ts; requireAuth() redirects to /authenticate. The dashboard/
-         editor/header server components + actions can now import them.
+  - Suggested next (in rough dependency order) — db + auth foundation now ALL
+    done, so the frontier is auth UI then actions then the rest of the UI:
+      1. AUTH UI: components/SignUpForm.tsx + components/LoginForm.tsx ("use
+         client", import signUp/signIn from "@/lib/auth-client", controlled
+         state, client-side validation, error display) -> app/authenticate/page.tsx
+         (toggles the two forms, redirects to /dashboard on success) -> Header
+         (server component, getSession()) + LogoutButton ("use client", signOut).
+         NOTE Turbopack: any NEW route/page importing lib/db (directly or via
+         lib/auth, e.g. Header) must build clean — getBuiltinModule already
+         handles it, don't revert to a dynamic require.
+      2. ACTIONS: lib/actions/notes.ts ("use server") wrapping the lib/notes repo
+         fns; guard order session -> ownership -> Zod -> SQL -> revalidatePath.
+         These unblock CreateNoteButton, the editor save/delete, and ShareToggle.
+      3. THEN CRUD/editor/share UI (dashboard, /notes/[id] editor + TipTap,
+         /p/[slug] public viewer) and finally the test tasks (Vitest + Playwright).
+         Server helpers DONE: getSession()/requireAuth() in lib/auth.ts;
+         requireAuth() redirects to /authenticate (prd route).
   - DONE this iter: "Implement server-side auth helpers" — getSession()/
     requireAuth() in lib/auth.ts (see DONE section). requireAuth redirects to
     /authenticate (prd route), returns NonNullable<Session>.
