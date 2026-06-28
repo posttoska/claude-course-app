@@ -84,7 +84,7 @@
       "Enforce user_id authorization",
       "Return updated Note or null"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",

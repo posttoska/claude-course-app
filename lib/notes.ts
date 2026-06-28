@@ -12,7 +12,7 @@
 
 import { nanoid } from "nanoid";
 import type { JSONContent } from "@tiptap/core";
-import { get, query, run } from "./db";
+import { get, query, run, type QueryParams } from "./db";
 
 /** A note as the rest of the app consumes it: camelCase, `contentJson` parsed. */
 export type Note = {
@@ -151,4 +151,47 @@ export function getNotesByUser(userId: string): Note[] {
     { $userId: userId },
   );
   return rows.map(mapRowToNote);
+}
+
+/** Fields a caller may patch on an existing note. `undefined` leaves a field untouched. */
+export type UpdateNoteInput = {
+  title?: string | null;
+  contentJson?: JSONContent;
+};
+
+/**
+ * Apply a partial update to a note owned by `userId`, returning the updated
+ * `Note` (or `null` if no owned note matches — SPEC §8 authorization).
+ *
+ * Only the fields present in `data` are written; `updated_at` is always bumped
+ * to now. Ownership is enforced in the WHERE clause (`user_id = $userId`), so a
+ * missing or someone-else's note simply updates 0 rows and resolves to `null`
+ * via the re-read — never revealing existence (SPEC §14.2). Content is stored as
+ * a JSON string (never raw HTML — SPEC §5.3).
+ *
+ * The SET clause is assembled from a fixed set of column assignments (no user
+ * input is ever interpolated); every value is still bound via `$name` params.
+ */
+export function updateNote(userId: string, noteId: string, data: UpdateNoteInput): Note | null {
+  const assignments: string[] = [];
+  const params: QueryParams = { $id: noteId, $userId: userId };
+
+  if (data.title !== undefined) {
+    assignments.push("title = $title");
+    params.$title = data.title;
+  }
+  if (data.contentJson !== undefined) {
+    assignments.push("content_json = $contentJson");
+    params.$contentJson = JSON.stringify(data.contentJson);
+  }
+
+  // Always refresh updated_at so the dashboard ordering reflects the edit.
+  assignments.push("updated_at = $now");
+  params.$now = new Date().toISOString();
+
+  run(`UPDATE notes SET ${assignments.join(", ")} WHERE id = $id AND user_id = $userId`, params);
+
+  // Re-read so the returned Note reflects the persisted row (and is null when
+  // the WHERE matched nothing — not found or not owned).
+  return getNoteById(userId, noteId);
 }

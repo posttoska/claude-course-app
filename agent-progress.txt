@@ -152,6 +152,40 @@ DONE
     ms-resolution timestamps can tie). 14/14 pass under Bun. Smoke file removed.
     `bun run build` PASS (typechecks), `bun run lint` PASS.
 
+[database] Implement updateNote function — passes=true
+  - Appended updateNote() to lib/notes.ts (sync, per the repo-fn convention:
+    reads/update/delete stay sync; driver is sync; the actions layer wraps them).
+    Added `type QueryParams` to the existing `import { ... } from "./db"`.
+  - Signature: updateNote(userId, noteId, data: UpdateNoteInput): Note | null
+    where UpdateNoteInput = { title?: string | null; contentJson?: JSONContent }.
+    `undefined` field = leave untouched; title accepts null to clear it (column
+    is nullable, SPEC §5.4).
+  - PARTIAL UPDATE: builds the SET clause from only the provided fields. The
+    assignment fragments ("title = $title", "content_json = $contentJson") are a
+    FIXED, hardcoded set — no user input is ever interpolated into SQL; every
+    value is still bound via $name params (SPEC §14.3 / CLAUDE.md invariant).
+    Flagging so a future iter doesn't "fix" the `${assignments.join()}` as if it
+    were injection — it's column names, not user data.
+  - updated_at = new Date().toISOString() is ALWAYS bumped (even on an empty
+    patch) so dashboard ORDER BY updated_at DESC reflects the edit.
+  - AUTHZ baked into WHERE (id=$id AND user_id=$userId): a missing or
+    someone-else's note updates 0 rows; the fn then RE-READS via getNoteById
+    (same ownership scope) and returns null — never revealing existence
+    (404-not-403 story, SPEC §8/§14.2). Re-read also guarantees the returned
+    Note mirrors the persisted row.
+  - VERIFIED: 19-assert throwaway Bun smoke test (DATABASE_PATH=:memory:, stub
+    `user` table + alice/bob). Covers: title-only (content untouched, updated_at
+    bumped > created_at, created_at unchanged, persisted), content-only (changed,
+    title kept, stored as JSON *string*), both fields, title->null clear,
+    AUTHZ (bob gets null + alice's note unchanged), missing id -> null, empty
+    patch (returns Note, bumps updated_at, keeps fields). 19/19 pass under Bun.
+    Smoke file removed. `bun run build` PASS, `bun run lint` PASS.
+  - REPO HAZARD NOTED (not introduced by this task): the PostToolUse format hook
+    runs `bun run format` (oxfmt), which CANNOT parse the Next.js skeleton JSX in
+    app/page.tsx and can transiently corrupt it — one `bun run build` failed on a
+    mangled page.tsx, but a re-run against the on-disk (valid) file PASSED. If a
+    future build fails on app/page.tsx JSX, re-run; the file itself is fine.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
@@ -169,19 +203,16 @@ CHECKS STATUS (whole repo)
 NEXT / NOTES FOR FUTURE ITERATIONS
 --------------------------------------------------------------------------------
   - Suggested next (in rough dependency order):
-      1. "Implement updateNote function" — partial title/contentJson, bump
-         updated_at = new Date().toISOString(), WHERE id=$id AND user_id=$uid,
-         return updated Note or null. Re-SELECT after UPDATE to build the Note.
-      2. "Implement deleteNote function" — DELETE WHERE id=$id AND user_id=$uid,
-         return run().changes > 0 (boolean).
-      3. "Implement note sharing functions" — setNotePublic(userId, noteId,
+      1. "Implement deleteNote function" — DELETE WHERE id=$id AND user_id=$uid,
+         return run().changes > 0 (boolean). Sync, mirrors updateNote's authz.
+      2. "Implement note sharing functions" — setNotePublic(userId, noteId,
          isPublic): on enable, generatePublicSlug() if public_slug is NULL + set
          is_public=1; on disable, set is_public=0 (KEEP the slug, SPEC §10.2).
          getNoteByPublicSlug(slug): SELECT ... WHERE public_slug=$s AND is_public=1
          (public route, no userId). NOTE: prd's slug task says "clear public_slug
          when disabling" but SPEC §10.2 says keep it so re-share reuses the link —
          resolve this conflict before implementing (recommend: keep, per SPEC).
-      4. Auth wiring (foundation, needed before any auth UI):
+      3. Auth wiring (foundation, needed before any auth UI):
          - "Create better-auth API route" — app/api/auth/[...all]/route.ts:
            `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
          - "Implement server-side auth helpers" — getSession()/requireAuth()
