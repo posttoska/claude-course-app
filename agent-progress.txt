@@ -259,6 +259,35 @@ DONE
     email -> 200 with a persisted user + token (full integration through the
     shared getDb() handle, incl. the new getBuiltinModule driver path).
 
+[auth] Implement server-side auth helpers — passes=true
+  - Added getSession() + requireAuth() to lib/auth.ts (per prd step "Export
+    helpers from lib/auth.ts" — NOT lib/session.ts; prd wins on file path). These
+    are the authoritative server-side session surface (SPEC §7.5); the optimistic
+    middleware cookie check is never the real gate.
+  - getSession(): Promise<Session> — wraps auth.api.getSession({ headers: await
+    headers() }) from next/headers; returns { user, session } | null. Validated
+    server-side (not just cookie-presence). Exported a `Session` type alias
+    (Awaited<ReturnType<typeof auth.api.getSession>>) so callers get the shape.
+  - requireAuth(): Promise<NonNullable<Session>> — getSession() then redirect()s
+    to "/authenticate" when null (prd's auth route is /authenticate, not SPEC's
+    /login). redirect()'s `never` return narrows the result to a guaranteed
+    non-null Session, so protected pages/actions can use session.user.id directly.
+  - ROUTE NOTE: redirect target is /authenticate and protected dashboard is
+    /dashboard — the prd's route names (app/authenticate, app/dashboard,
+    app/notes/[id], app/p/[slug]) differ from SPEC §11 (/login, /notes,
+    /share/[publicId]). prd is what `passes` tracks; following prd routes.
+  - Imports next/headers + next/navigation at module top. lib/auth.ts is already
+    server-only (top-level await migrations, better-auth/next-js), so no new
+    client coupling; build confirms it still bundles into the auth route.
+  - VERIFIED: 7-assert throwaway Bun smoke (DATABASE_PATH=:memory:) of the
+    underlying auth.api.getSession the helpers wrap — no cookie -> null, sign-up
+    issues Set-Cookie, valid cookie -> session with correct user.email/name +
+    token, bogus cookie -> null (server-validated, not presence-only). 7/7 pass.
+    (The helpers themselves need Next's request scope so can't be called from a
+    bare Bun script; build typechecks them + the smoke proves the wrapped API.)
+    Smoke file removed. `bun run build` PASS (helpers bundle into /api/auth route),
+    `bun run lint` PASS.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
@@ -289,13 +318,18 @@ NEXT / NOTES FOR FUTURE ITERATIONS
   - Suggested next (in rough dependency order):
       1. "Create SQLite database with better-auth schema" — verify-only: cold
          start already creates user/session/account/verification (auth
-         migrations) + notes (lib/db.ts). The POST sign-up smoke this iter proved
-         the auth tables exist + accept writes; just confirm + flip passes=true.
-      2. Remaining auth wiring (foundation, needed before any auth UI):
-         - "Implement server-side auth helpers" — getSession()/requireAuth()
-           wrapping auth.api.getSession({ headers: await headers() }). NOTE: prd
-           file path is lib (not lib/session.ts from CLAUDE.md) — check prd steps.
-         - "Create auth client for frontend" — lib/auth-client.ts (createAuthClient).
+         migrations) + notes (lib/db.ts). The POST sign-up smoke proved the auth
+         tables exist + accept writes; just confirm + flip passes=true.
+      2. "Create auth client for frontend" — lib/auth-client.ts
+         (createAuthClient from better-auth/react; export signIn/signUp/signOut/
+         useSession). Last bit of auth foundation before the auth UI forms.
+      3. THEN auth UI (SignUpForm/LoginForm -> app/authenticate page -> Header/
+         LogoutButton). Server helpers are DONE: getSession()/requireAuth() live
+         in lib/auth.ts; requireAuth() redirects to /authenticate. The dashboard/
+         editor/header server components + actions can now import them.
+  - DONE this iter: "Implement server-side auth helpers" — getSession()/
+    requireAuth() in lib/auth.ts (see DONE section). requireAuth redirects to
+    /authenticate (prd route), returns NonNullable<Session>.
   - REPO-FN CONVENTION (set by createNote this iter): createNote is async per prd;
     the read/update/delete/share fns can stay SYNC (driver is sync). All return
     Note | Note[] | boolean and bake ownership into the WHERE clause. Reuse

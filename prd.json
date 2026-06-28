@@ -141,7 +141,7 @@
       "Export helpers from lib/auth.ts",
       "Test helpers return correct session data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "auth",

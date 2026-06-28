@@ -12,6 +12,8 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { getMigrations } from "better-auth/db/migration";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getDb } from "./db";
 
 export const auth = betterAuth({
@@ -25,4 +27,34 @@ export const auth = betterAuth({
 if (process.env.NEXT_PHASE !== "phase-production-build") {
   const { runMigrations } = await getMigrations(auth.options);
   await runMigrations();
+}
+
+/** The authoritative session shape `{ user, session }` (or `null` when signed out). */
+export type Session = Awaited<ReturnType<typeof auth.api.getSession>>;
+
+/**
+ * Read the current session in a Server Component / Server Action (SPEC §7.5).
+ *
+ * Reads the incoming request cookies via `next/headers` and validates them
+ * server-side through better-auth — this is the authoritative check (the
+ * optimistic middleware cookie-presence test is never the real gate). Returns
+ * `{ user, session }` when signed in, or `null` otherwise.
+ */
+export async function getSession(): Promise<Session> {
+  return auth.api.getSession({ headers: await headers() });
+}
+
+/**
+ * Require an authenticated user, returning the non-null session.
+ *
+ * Use at the top of every protected page/layout and Server Action. When there
+ * is no valid session it `redirect()`s to the auth page (its `never` return
+ * narrows the result to a guaranteed non-null `Session` for callers).
+ */
+export async function requireAuth(): Promise<NonNullable<Session>> {
+  const session = await getSession();
+  if (!session) {
+    redirect("/authenticate");
+  }
+  return session;
 }
