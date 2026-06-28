@@ -1339,3 +1339,63 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     node:sqlite fallback in lib/db.ts handles this). NOTE: better-auth itself is
     backed by bun:sqlite under the app runtime; do NOT try to drive auth flows
     from vitest/Node — verify auth via Bun (smoke script or e2e) instead.
+
+[ui] Build share toggle component + Add copy URL functionality — passes=true (x2)
+  (Did ONE focused increment — components/ShareToggle.tsx — that completes the
+  "Build share toggle component" task AND its tightly-coupled successor "Add copy
+  URL functionality" (whose every step is a sub-part of building the share UI).
+  Both verified end-to-end via Playwright, so both flipped to passes=true rather
+  than leaving copy-url falsely false. Opens the SHARING feature; unblocks the
+  /p/[slug] public page (you now have a real public slug to test against).)
+  - Created components/ShareToggle.tsx ("use client"): the per-note sharing control
+    (SPEC §10.2). Props { noteId, initialIsPublic, initialPublicSlug }. Drives the
+    UX only — the authoritative auth+ownership re-check and SQL stay server-side in
+    toggleShareAction (SPEC §8/§12/§14.2). Local useState mirrors the server so the
+    switch flips instantly; the action's returned Note keeps it in sync.
+  - TOGGLE: accessible switch — a real <button role="switch" aria-checked> (keyboard
+    + SR friendly), green when on. onClick -> toggleShareAction(noteId, !isPublic);
+    on ok, adopts result.data.isPublic/publicSlug + success toast; on error, error
+    toast (reuses the app-wide useToast from components/Toast). Disabled while pending.
+  - PUBLIC URL: shown only when public. Built as `${NEXT_PUBLIC_APP_URL}/p/${slug}`
+    (SPEC §15) from the SLUG, never the internal note id (SPEC §10.1/§14.5). Empty
+    env fallback yields a relative /p/<slug> (still copies/opens). Read-only input,
+    selects-all on focus.
+  - COPY (the copy-url task): navigator.clipboard.writeText(shareUrl) -> button label
+    flips "Copy link" -> "Copied!" for 2000ms (COPIED_FEEDBACK_MS), then reverts.
+    clipboard can reject (denied/insecure context) -> caught -> error toast (graceful,
+    not swallowed). No success toast on copy (the inline "Copied!" is the feedback).
+  - WIRING: app/notes/[id]/page.tsx renders <ShareToggle> below <NoteEditor>, passing
+    note.id/isPublic/publicSlug. The page's static Public/Private header badge stays
+    (reflects server state on next load); ShareToggle is the interactive surface.
+    ToastProvider already wraps the app in app/layout.tsx, so useToast works here.
+  - SLUG SEMANTICS (delegated to setNotePublic, SPEC §10.2): enable mints a slug only
+    if none exists (re-share reuses the SAME link); disable keeps the slug but flips
+    is_public=0 so old links 404 via the is_public=1 gate. Confirmed by Playwright
+    (toggle off then the link is gone from UI; slug persists in DB for re-share).
+  - VERIFIED with Playwright MCP against the live dev server (:3000), existing
+    session: opened a Private note -> Sharing section shows switch OFF + "Only you can
+    see this note." + NO url. Flip ON -> switch checked + "Anyone with the link can
+    view this note." + url input "http://localhost:3000/p/C6C6RuxeIlxQs-KzbSZ_z" +
+    Copy link button + header badge flipped Public. Reloaded -> still public (DB
+    write persisted via toggleShareAction). Copy: in this sandboxed context
+    navigator.clipboard is permission-denied (NotAllowedError) -> the FAILURE path
+    held correctly (button stayed "Copy link"); then stubbed a resolving writeText
+    to exercise the SUCCESS path -> writeText received the exact share URL AND the
+    label transitioned to "Copied!" (observed via in-page click+settle). Toggle OFF
+    -> switch unchecked, url GONE, message back to "Only you can see this note.".
+    0 console errors across the whole flow.
+  - CHECKS: `bun run lint` PASS (clean), `bun run build` PASS (6 routes; /notes/[id]
+    compiles with ShareToggle as ƒ dynamic). `bun run test` = "No test files found"
+    exit 1 — EXPECTED, the Vitest setup + test tasks are still passes=false (not a
+    regression; testing category not started). No `test:e2e` script exists yet
+    (Playwright-test setup is also a pending prd task; UI verified via Playwright MCP
+    instead, per the loop instruction).
+  - NOTE: the verify left the "autosave" note PRIVATE (toggled back off); its slug is
+    retained per SPEC §10.2. Writes hit the gitignored dev DB data/app.sqlite. Harmless.
+  - NEXT: the public read path — app/p/[slug]/page.tsx (RSC, getNoteByPublicSlug, 404
+    if missing/not public, NO auth) + components/PublicNoteViewer.tsx rendering the
+    TipTap JSON server-side with @tiptap/static-renderer's renderToReactElement
+    (React-escaped, no dangerouslySetInnerHTML — SPEC §10.3/§14.1), reusing the shared
+    lib/tiptap extensions. @tiptap/static-renderer is NOT in package.json yet -> bun add
+    it. This is the riskiest remaining integration (new dep + the shared-config render
+    contract); do it next. Then landing/styling/responsive, then the test setup tasks.

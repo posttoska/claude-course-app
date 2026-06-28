@@ -415,7 +415,7 @@
       "Display public URL when enabled",
       "Add Copy URL button"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
@@ -426,7 +426,7 @@
       "Handle copy errors gracefully",
       "Integrate into ShareToggle"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

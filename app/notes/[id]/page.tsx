@@ -20,6 +20,7 @@ import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { getNoteById } from "@/lib/notes";
 import { NoteEditor } from "@/components/NoteEditor";
+import { ShareToggle } from "@/components/ShareToggle";
 
 /** Stable, server-rendered date label (e.g. "28 Jun 2026"). Matches NoteList. */
 function formatUpdatedAt(iso: string): string {
@@ -64,6 +65,12 @@ export default async function NoteEditorPage({ params }: { params: Promise<{ id:
       </header>
 
       <NoteEditor note={note} />
+
+      <ShareToggle
+        noteId={note.id}
+        initialIsPublic={note.isPublic}
+        initialPublicSlug={note.publicSlug}
+      />
     </main>
   );
 }
