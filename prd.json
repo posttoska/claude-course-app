@@ -357,7 +357,7 @@
       "Add Paragraph button to reset formatting",
       "Show active state for current formatting"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

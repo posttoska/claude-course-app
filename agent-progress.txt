@@ -990,6 +990,58 @@ DONE
     toasts + loading.tsx -> ShareToggle (toggleShareAction) + copy URL. Then
     /p/[slug] public viewer, landing/styling/responsive, Vitest + Playwright setup.
 
+[ui] Build editor toolbar with formatting buttons — passes=true
+  - Created components/EditorToolbar.tsx ("use client") and mounted it in
+    components/NoteEditor.tsx at the marked toolbar slot (above EditorContent,
+    below the title input). Takes the live `editor: Editor` prop from NoteEditor
+    (which already guards `if (!editor) return null`, so editor is non-null here).
+    THIS task's whitelist: Bold, Italic, H1, H2, H3, Paragraph(reset). The
+    inline-code / code-block / bullet-list / horizontal-rule buttons are the NEXT
+    prd task and will be appended to this same toolbar (left a ToolbarButton +
+    ToolbarDivider helper to extend). Flagging so a future iter doesn't think the
+    toolbar is missing those — they're a separate passes=false task.
+  - REACTIVITY (the crux, and the one real integration risk): in @tiptap/react v3
+    the editor state is NOT auto-reactive (deliberate perf choice) — a plain
+    editor.isActive()/editor.can() read freezes on the INITIAL state, so buttons
+    would never highlight. Verified the fix against TipTap v3 docs via context7:
+    subscribe through the useEditorState({ editor, selector }) hook; the selector
+    re-runs each transaction and re-renders only when a selected value changes.
+    Selector returns isBold/canBold/isItalic/canItalic/isH1/isH2/isH3/isParagraph.
+    Flagging so a future iter doesn't "simplify" it back to bare isActive() (that
+    silently breaks the active highlighting).
+  - COMMANDS (SPEC §9.3): bold/italic = editor.chain().focus().toggleBold()/
+    toggleItalic().run(); headings = toggleHeading({ level }); paragraph =
+    setParagraph() (resets the current block to normal text). Bold/Italic also
+    disable when !can(...) (e.g. selection where the mark can't apply).
+  - A11y/style: role="toolbar" aria-label, each button type="button" with
+    aria-pressed={isActive} + aria-label + title; active = inverted
+    bg-foreground/text-background, inactive = hover tint, disabled =
+    opacity-40/cursor-not-allowed. Foreground/background theme tokens, dark-mode
+    aware, flex-wrap, a thin divider between the marks group and the block group.
+    Tailwind v4 utilities only.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), existing
+    session, opened "Project ideas" (/notes/<uuid>): (1) toolbar renders Bold/
+    Italic/H1/H2/H3/Paragraph; on load Paragraph is [pressed] (cursor in the empty
+    paragraph) — reactive active state correct from first render; (2) typed text +
+    clicked H1 -> text became <h1>, H1 [pressed], Paragraph un-pressed (reactive
+    transition); (3) select-all + Bold -> text wrapped in <strong>, Bold [pressed];
+    (4) Italic -> <em> added, Italic [pressed]; (5) Paragraph -> the H1 converted
+    back to <paragraph> (reset works), Paragraph [pressed], H1 un-pressed. 0
+    console errors across the whole flow. NOTE: save isn't wired yet (later task),
+    so these edits did NOT persist — the note row is unchanged; dev DB gitignored.
+  - `bun run build` PASS (6 routes; /notes/[id] bundles the toolbar into the client
+    editor; useEditorState selector typechecks clean), `bun run lint` PASS (clean).
+    test/test:e2e unchanged (see CHECKS STATUS — still pre-existing no-suites state;
+    those are later prd tasks).
+  - NEXT (editor cluster, in order): add code/list buttons to THIS toolbar
+    (inline code = toggleCode, code block = toggleCodeBlock, bullet list =
+    toggleBulletList, horizontal rule = setHorizontalRule — extend the
+    useEditorState selector with their is/can flags) -> save (updateNoteAction,
+    debounced auto-save, status indicator, skip initial load — reads NoteEditor's
+    title state + contentRef) -> delete (confirm -> deleteNoteAction -> /dashboard)
+    -> nav/error/toasts + loading.tsx -> ShareToggle (toggleShareAction) + copy URL.
+    Then /p/[slug] public viewer, landing/styling/responsive, Vitest + Playwright.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

@@ -15,6 +15,7 @@ import { useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import { extensions } from "@/lib/tiptap";
+import { EditorToolbar } from "@/components/EditorToolbar";
 import type { Note } from "@/lib/notes";
 
 // Mirror TitleSchema's cap (lib/validation.ts, SPEC §13) so the input can't
@@ -76,7 +77,7 @@ export function NoteEditor({
         aria-label="Note title"
         className="mb-2 w-full bg-transparent text-2xl font-semibold tracking-tight placeholder:text-foreground/40 focus:outline-none"
       />
-      {/* Toolbar (next prd task) mounts here, above the editable content. */}
+      <EditorToolbar editor={editor} />
       <EditorContent editor={editor} />
     </div>
   );
