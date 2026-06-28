@@ -288,6 +288,26 @@ DONE
     Smoke file removed. `bun run build` PASS (helpers bundle into /api/auth route),
     `bun run lint` PASS.
 
+[auth] Create auth client for frontend — passes=true
+  - Created lib/auth-client.ts: the browser-side auth surface for "use client"
+    components (SPEC §7.3). `export const authClient = createAuthClient()` from
+    "better-auth/react" — baseURL OMITTED on purpose: app + /api/auth share one
+    origin, so the client defaults to the current origin and talks to the
+    catch-all handler (app/api/auth/[...all]/route.ts).
+  - Per prd "Export signIn, signUp, signOut + useSession": added named re-exports
+    via `export const { signIn, signUp, signOut, useSession } = authClient` for
+    ergonomic call sites (signIn.email / signUp.email / signOut() / useSession()).
+    Confirmed names against current better-auth/react docs (context7).
+  - NO lib/db / lib/auth import here, so no Turbopack dynamic-require concern; this
+    module is client-safe and bundles cleanly.
+  - VERIFIED: smoke import under Bun — exports authClient, signIn, signOut, signUp,
+    useSession; signIn.email is a function, useSession is a function. `bun run lint`
+    PASS (clean), `bun run build` PASS (compiled + TypeScript ran + 4 static pages).
+    No UI in this task -> Playwright N/A. test/test:e2e unchanged (see below).
+  - UNBLOCKS auth UI: SignUpForm/LoginForm/LogoutButton can now import signUp/
+    signIn/signOut/useSession from "@/lib/auth-client". Next suggested: the auth
+    UI forms -> app/authenticate page -> Header + LogoutButton.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

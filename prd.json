@@ -152,7 +152,7 @@
       "Export useSession hook for client components",
       "Test client can be imported without errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
