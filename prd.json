@@ -107,7 +107,7 @@
       "Create getNoteByPublicSlug(slug) for public access",
       "Only return note if is_public = 1"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "auth",

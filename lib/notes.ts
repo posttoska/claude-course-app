@@ -212,3 +212,59 @@ export function deleteNote(userId: string, noteId: string): boolean {
   });
   return changes > 0;
 }
+
+/**
+ * Toggle a note's public sharing, returning the updated `Note` (or `null` if no
+ * owned note matches — SPEC §8, §10.2 share/unshare flows).
+ *
+ * Ownership is enforced up front via `getNoteById` (scoped to `user_id`), so a
+ * missing or someone-else's note resolves to `null` without revealing existence
+ * (SPEC §14.2).
+ *
+ * - **Enable:** mint a `public_slug` only if the note doesn't already have one,
+ *   so re-sharing reuses the same link; set `is_public = 1`.
+ * - **Disable:** set `is_public = 0` but **KEEP** the slug. This follows SPEC
+ *   §10.2 (re-share yields the same URL) and the CLAUDE.md invariant that public
+ *   access is gated *solely* on `is_public = 1` — `getNoteByPublicSlug` requires
+ *   it, so old links 404 while unshared. NOTE: this intentionally deviates from
+ *   the prd step "clear public_slug when disabling"; SPEC is authoritative
+ *   (CLAUDE.md) and a future iter shouldn't "fix" it back to clearing the slug.
+ */
+export function setNotePublic(userId: string, noteId: string, isPublic: boolean): Note | null {
+  const existing = getNoteById(userId, noteId);
+  if (!existing) return null;
+
+  // Reuse an existing slug; only mint a new one when first enabling sharing.
+  const publicSlug = isPublic ? (existing.publicSlug ?? generatePublicSlug()) : existing.publicSlug;
+
+  run(
+    `UPDATE notes SET is_public = $isPublic, public_slug = $publicSlug, updated_at = $now
+     WHERE id = $id AND user_id = $userId`,
+    {
+      $isPublic: isPublic ? 1 : 0,
+      $publicSlug: publicSlug,
+      $now: new Date().toISOString(),
+      $id: noteId,
+      $userId: userId,
+    },
+  );
+
+  // Re-read so the returned Note mirrors the persisted row.
+  return getNoteById(userId, noteId);
+}
+
+/**
+ * Fetch a publicly shared note by its high-entropy share token (SPEC §10.3,
+ * public read-only route). No `userId` — this is the unauthenticated path.
+ *
+ * Gated *solely* on `is_public = 1` (CLAUDE.md invariant): an unshared note,
+ * even one that still carries a slug from a prior share, returns `null` so the
+ * route 404s. Lookup is by `public_slug` (the share token), never the internal
+ * `id`, which is never exposed on public routes (SPEC §10.1, §14.5).
+ */
+export function getNoteByPublicSlug(slug: string): Note | null {
+  const row = get<NoteRow>("SELECT * FROM notes WHERE public_slug = $slug AND is_public = 1", {
+    $slug: slug,
+  });
+  return row ? mapRowToNote(row) : null;
+}

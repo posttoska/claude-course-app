@@ -202,6 +202,33 @@ DONE
     re-delete -> false. 6/6 pass. Smoke file removed.
     `bun run build` PASS (typechecks), `bun run lint` PASS (clean).
 
+[database] Implement note sharing functions — passes=true
+  - Appended setNotePublic() + getNoteByPublicSlug() to lib/notes.ts (sync, per
+    the repo-fn convention). Reuses get/run from lib/db + getNoteById/
+    generatePublicSlug/mapRowToNote already in lib/notes — no new imports. This
+    COMPLETES the database/data-layer category.
+  - setNotePublic(userId, noteId, isPublic): Note | null. Reads via getNoteById
+    first (ownership baked into its WHERE), so a missing/someone-else's note ->
+    null with no existence leak (SPEC §14.2). Enable: mint a slug ONLY if
+    public_slug is NULL (re-share reuses the link), set is_public=1. Disable: set
+    is_public=0 but KEEP the slug. updated_at bumped. Single parameterized UPDATE
+    scoped to id+user_id.
+  - getNoteByPublicSlug(slug): Note | null. SELECT ... WHERE public_slug=$slug
+    AND is_public=1 (no userId — the public route). Gated SOLELY on is_public=1,
+    looked up by the share token (never the internal id) — SPEC §10.1/§10.3/§14.5
+    + CLAUDE.md invariant. An unshared note that still carries a slug 404s.
+  - SPEC-vs-prd CONFLICT RESOLVED: prd step says "clear public_slug when
+    disabling"; SPEC §10.2 + CLAUDE.md invariant say KEEP it (re-share yields the
+    same URL; lookup gates on is_public=1 so old links 404 while unshared). SPEC
+    is authoritative (CLAUDE.md) -> kept the slug. Documented in the fn docstring
+    so a future iter doesn't "fix" it back to clearing.
+  - VERIFIED: 18-assert throwaway Bun smoke test (DATABASE_PATH=:memory:, stub
+    `user` table + alice/bob). Covers: enable mints 21-char slug + flips public +
+    bumps updated_at, public lookup finds it (content maps), unknown slug -> null,
+    disable keeps slug but public lookup 404s, re-enable REUSES same slug + lookup
+    works again, AUTHZ (bob/missing -> null, alice's note untouched). 18/18 pass.
+    Smoke file removed. `bun run build` PASS, `bun run lint` PASS (clean).
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
@@ -218,15 +245,16 @@ CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
 NEXT / NOTES FOR FUTURE ITERATIONS
 --------------------------------------------------------------------------------
+  - DATA LAYER (lib/notes.ts) COMPLETE: full repository surface (create/getById/
+    getByUser/update/delete/setNotePublic/getNoteByPublicSlug) + types/helpers.
+    The only remaining `database`-category prd task is "Create SQLite database
+    with better-auth schema" (passes=false) — now trivially satisfiable: cold
+    start already creates user/session/account/verification (auth migrations) +
+    notes (lib/db.ts); just verify the tables exist and flip it. Next phases are
+    auth wiring -> actions -> UI -> tests.
   - Suggested next (in rough dependency order):
-      1. "Implement note sharing functions" — setNotePublic(userId, noteId,
-         isPublic): on enable, generatePublicSlug() if public_slug is NULL + set
-         is_public=1; on disable, set is_public=0 (KEEP the slug, SPEC §10.2).
-         getNoteByPublicSlug(slug): SELECT ... WHERE public_slug=$s AND is_public=1
-         (public route, no userId). NOTE: prd's slug task says "clear public_slug
-         when disabling" but SPEC §10.2 says keep it so re-share reuses the link —
-         resolve this conflict before implementing (recommend: keep, per SPEC).
-      3. Auth wiring (foundation, needed before any auth UI):
+      1. "Create SQLite database with better-auth schema" — verify-only (above).
+      2. Auth wiring (foundation, needed before any auth UI):
          - "Create better-auth API route" — app/api/auth/[...all]/route.ts:
            `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
          - "Implement server-side auth helpers" — getSession()/requireAuth()
