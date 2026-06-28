@@ -712,6 +712,40 @@ DONE
     /p/[slug] public viewer (@tiptap/static-renderer + @tailwindcss/typography are
     installed), then the Vitest/Playwright test-setup tasks.
 
+[ui] Create notes list component — passes=true
+  - Created components/NoteList.tsx by EXTRACTING the inline card list that the
+    dashboard page already rendered into a reusable presentational component, then
+    rewired app/dashboard/page.tsx to `<NoteList notes={notes} />`. This is the
+    page-first-then-extract flow the dashboard iter flagged as intended — not new
+    behavior, so the rendered output is byte-identical to the already-verified
+    dashboard. Picked it as the clean next dependency step (data + actions layers
+    complete; dashboard page done).
+  - COMPONENT: Server Component (no "use client" — read-only <Link> cards, no
+    client JS). Props `{ notes: Note[] }` (Note type from @/lib/notes). Owns BOTH
+    the populated list AND the empty state ("No notes yet" dashed card) per the prd
+    step "Show helpful message when list is empty". The page still owns the data
+    fetch (requireAuth + getNotesByUser, scoped to owner) and the header/subtitle
+    ("N notes" vs "no notes yet") — NoteList is pure presentation.
+  - Each card: title (falls back to "Untitled note" on null/blank), "Updated
+    <date>" via formatUpdatedAt (stable en-GB d-MMM-yyyy — safe in an RSC, output
+    is serialized not re-run client-side), Public/Private badge, and a
+    <Link href={`/notes/${id}`}>. Card grid layout (sm:2 / lg:3 cols), foreground/
+    background theme tokens, dark-mode borders/hover, line-clamp-2 titles —
+    Tailwind v4, unchanged from the inline markup.
+  - VERIFIED with Playwright MCP against the live dev server (:3000): /dashboard
+    (existing session) rendered "2 notes" + two cards from NoteList — "Project
+    ideas" (Public badge) and "Shopping list" (Private badge), correct
+    /notes/<uuid> links, "Updated 28 Jun 2026", and updated_at DESC order
+    (shared "Project ideas" sorts first). 0 console errors / 0 warnings (only the
+    React DevTools info + HMR-connected log). Empty-state branch is the same markup
+    already verified in the dashboard iter. `bun run build` PASS (5 routes,
+    /dashboard still ƒ Dynamic), `bun run lint` PASS (clean).
+  - NEXT (dashboard cluster): components/CreateNoteButton.tsx ("use client", calls
+    createNoteAction then router.push(`/notes/${id}`), add to dashboard) ->
+    app/dashboard/loading.tsx + error.tsx. Then the /notes/[id] editor (TipTap —
+    needs lib/tiptap.ts; @tiptap/react installed) + /p/[slug] public viewer, then
+    the Vitest/Playwright test-setup tasks.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

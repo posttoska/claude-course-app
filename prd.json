@@ -286,7 +286,7 @@
       "Style as card layout",
       "Show helpful message when list is empty"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
