@@ -227,7 +227,7 @@
       "Return created note or error",
       "Use Zod for input validation if data provided"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "actions",

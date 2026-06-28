@@ -431,6 +431,43 @@ DONE
     signOut) -> then the ACTIONS layer (lib/actions/notes.ts "use server") which
     unblocks the dashboard/editor/share UI.
 
+[actions] Create server action for creating notes — passes=true
+  (FIRST actions task; opens the ACTIONS layer + adds lib/validation.ts. Chose
+  this foundation over the Header/LogoutButton UI tasks per the loop rule
+  "foundation/risky before routine UI" — actions unblock the whole CRUD UI.)
+  - Created lib/validation.ts (SPEC §13 — the shared Zod surface for all
+    mutations; client is never trusted): TitleSchema (z.string().trim().max(200)),
+    NoteContentSchema (z.looseObject requiring type:"doc" + content array, .refine
+    caps serialized size at MAX_CONTENT_BYTES=1MB via TextEncoder byte count),
+    CreateNoteSchema ({ title?, contentJson? } both optional). Used Zod v4 API
+    (z.looseObject, not deprecated .passthrough()) — verified vs zod 4.4.3 via
+    context7. looseObject KEEPS extra top-level doc keys (e.g. attrs) instead of
+    silently dropping them. Did NOT deep-validate node types (editor whitelist in
+    lib/tiptap.ts handles that, a later task) — shape + size only, defense in depth.
+  - Created lib/actions/notes.ts ("use server"): exports type ActionResult<T> =
+    { ok:true; data:T } | { ok:false; error:string } (serializable result so
+    client callers can react to failures; will be reused by update/delete/share
+    actions) + createNoteAction(input?). Guard order session -> Zod (only when
+    input supplied) -> SQL (createNote repo) -> revalidatePath("/dashboard").
+  - DECISION: action uses getSession() and RETURNS an error result for the
+    unauthenticated case (not requireAuth()'s thrown redirect). Matches prd
+    "Return created note or error" + keeps the action serializable/testable; the
+    client form decides how to recover. requireAuth() stays the gate for PAGES.
+    Flagging so a future iter doesn't swap it to requireAuth here.
+  - With no/empty input the repo applies defaults ("Untitled note" + empty TipTap
+    doc). Parsed contentJson cast to JSONContent when handed to createNote.
+  - VERIFIED: `bun run build` PASS (TS typechecks both new files; build graph
+    unchanged — 4 routes — since nothing imports the action yet), `bun run lint`
+    PASS. 13-assert throwaway Bun smoke of lib/validation (empty ok, title trim +
+    max + non-string reject, doc shape accept/reject, loose elements + extra keys
+    preserved, 1MB oversize reject, both-fields) — 13/13 pass, file removed.
+    The action wiring (getSession/revalidatePath) needs a Next request scope so
+    it isn't bare-script testable; full e2e arrives with CreateNoteButton. No UI
+    in this task -> Playwright N/A.
+  - NEXT (actions, in file order): updateNoteAction (ownership + UpdateNoteSchema +
+    revalidate), deleteNoteAction, toggleShareAction. Then dashboard/editor/share
+    UI consume these. Reuse ActionResult<T> + add UpdateNoteSchema to lib/validation.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
