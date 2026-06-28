@@ -10,8 +10,15 @@
 import { revalidatePath } from "next/cache";
 import type { JSONContent } from "@tiptap/core";
 import { getSession } from "@/lib/auth";
-import { createNote, type CreateNoteInput, type Note } from "@/lib/notes";
-import { CreateNoteSchema } from "@/lib/validation";
+import {
+  createNote,
+  getNoteById,
+  updateNote,
+  type CreateNoteInput,
+  type Note,
+  type UpdateNoteInput,
+} from "@/lib/notes";
+import { CreateNoteSchema, UpdateNoteSchema } from "@/lib/validation";
 
 /** Standard mutation result: either the produced data or a human-readable error. */
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -49,5 +56,54 @@ export async function createNoteAction(input?: {
 
   const note = await createNote(session.user.id, data);
   revalidatePath("/dashboard");
+  return { ok: true, data: note };
+}
+
+/**
+ * Apply a partial update (title and/or content) to a note the caller owns and
+ * return the updated note (SPEC §12 update flow).
+ *
+ * Guard order: session -> ownership -> Zod validation -> SQL -> revalidate.
+ * Ownership is re-checked server-side (SPEC §8, §14.2): a missing or
+ * someone-else's note is indistinguishable — both yield "Note not found.",
+ * never revealing whether the id exists. `title` may be `null` to clear it; an
+ * omitted field is left untouched. The dashboard list and the note page are both
+ * revalidated so the new title/timestamp/content show up.
+ */
+export async function updateNoteAction(
+  noteId: string,
+  input: { title?: string | null; contentJson?: unknown },
+): Promise<ActionResult<Note>> {
+  const session = await getSession();
+  if (!session) {
+    return { ok: false, error: "You must be signed in to update a note." };
+  }
+
+  // Ownership: re-check before validating or writing. `getNoteById` is scoped to
+  // the owner, so a non-owned/missing note returns null without leaking existence.
+  if (!getNoteById(session.user.id, noteId)) {
+    return { ok: false, error: "Note not found." };
+  }
+
+  const parsed = UpdateNoteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Invalid note data." };
+  }
+
+  const data: UpdateNoteInput = {};
+  if (parsed.data.title !== undefined) data.title = parsed.data.title;
+  if (parsed.data.contentJson !== undefined) {
+    data.contentJson = parsed.data.contentJson as JSONContent;
+  }
+
+  const note = updateNote(session.user.id, noteId, data);
+  if (!note) {
+    // Lost the row between the ownership check and the write (e.g. concurrent
+    // delete) — still report "not found" rather than revealing what happened.
+    return { ok: false, error: "Note not found." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/notes/${noteId}`);
   return { ok: true, data: note };
 }

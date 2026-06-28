@@ -468,6 +468,43 @@ DONE
     revalidate), deleteNoteAction, toggleShareAction. Then dashboard/editor/share
     UI consume these. Reuse ActionResult<T> + add UpdateNoteSchema to lib/validation.
 
+[actions] Create server action for updating notes — passes=true
+  - Added updateNoteAction(noteId, input) to lib/actions/notes.ts and
+    UpdateNoteSchema/UpdateNoteSchemaInput to lib/validation.ts. Reuses the
+    repo's updateNote/getNoteById/UpdateNoteInput + the ActionResult<T> shape
+    from createNoteAction (serializable result; client decides how to recover).
+  - GUARD ORDER (CLAUDE.md / SPEC §12): session -> ownership -> Zod -> SQL ->
+    revalidate. Explicit ownership check via getNoteById(userId,noteId) BEFORE
+    validating/writing: a missing OR someone-else's note both return "Note not
+    found." with no existence leak (SPEC §8/§14.2, 404-not-403). updateNote's
+    WHERE also re-enforces ownership, so a concurrent delete between the check
+    and the write still resolves to "not found" (handled).
+  - VALIDATION: UpdateNoteSchema = { title?: TitleSchema.nullable().optional(),
+    contentJson?: NoteContentSchema.optional() } — a partial patch. title may be
+    null to CLEAR it (column nullable, SPEC §5.4); absent field = untouched.
+    contentJson reuses NoteContentSchema (doc-shape + 1MB size cap). Only
+    fields actually present in parsed.data are forwarded to updateNote, so an
+    omitted title isn't coerced to null. Parsed contentJson cast to JSONContent.
+  - REVALIDATE: both /dashboard (list: title/updated_at) and /notes/${noteId}
+    (the editor page) so the edit shows up in both places (prd "Revalidate path
+    after update").
+  - DECISION: action uses getSession() and RETURNS an error result for the
+    unauthenticated/not-found cases (not requireAuth()'s thrown redirect) —
+    matches prd "Return updated note or error" + keeps the action serializable/
+    testable. Consistent with createNoteAction. requireAuth() stays the PAGE gate.
+  - VERIFIED: `bun run build` PASS (TS typechecks both files; graph unchanged at
+    4 routes — nothing imports the action yet), `bun run lint` PASS (clean).
+    13-assert throwaway Bun smoke of UpdateNoteSchema (empty patch ok, title
+    string/trim/null-clear/non-string-reject/over-max-reject, contentJson
+    accept + missing-type/non-doc/oversize reject, both-fields) — 13/13 pass,
+    file removed. The action wiring (getSession/revalidatePath) needs a Next
+    request scope so isn't bare-script testable; full e2e arrives with the editor
+    Save flow. underlying updateNote repo already has a 19-assert smoke from its
+    own iter. No UI in this task -> Playwright N/A.
+  - NEXT (actions, in file order): deleteNoteAction (ownership + revalidate
+    /dashboard), toggleShareAction (ownership + setNotePublic + revalidate note
+    page). Then dashboard/editor/share UI consume create/update/delete/share.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

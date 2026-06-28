@@ -40,3 +40,17 @@ export const CreateNoteSchema = z.object({
 });
 
 export type CreateNoteSchemaInput = z.infer<typeof CreateNoteSchema>;
+
+/**
+ * Input accepted by the update-note action — a partial patch (SPEC §12 update flow).
+ *
+ * Every field is optional (an absent field is left untouched). `title` is also
+ * nullable so the caller can explicitly clear it (the column is nullable —
+ * SPEC §5.4); `contentJson` reuses the shape + size checks of the create schema.
+ */
+export const UpdateNoteSchema = z.object({
+  title: TitleSchema.nullable().optional(),
+  contentJson: NoteContentSchema.optional(),
+});
+
+export type UpdateNoteSchemaInput = z.infer<typeof UpdateNoteSchema>;

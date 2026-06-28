@@ -239,7 +239,7 @@
       "Return updated note or error",
       "Revalidate path after update"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "actions",
