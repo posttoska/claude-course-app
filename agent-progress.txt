@@ -505,6 +505,44 @@ DONE
     /dashboard), toggleShareAction (ownership + setNotePublic + revalidate note
     page). Then dashboard/editor/share UI consume create/update/delete/share.
 
+[actions] Create server action for deleting notes — passes=true
+  - Added deleteNoteAction(noteId) to lib/actions/notes.ts and `deleteNote` to the
+    existing import from @/lib/notes. Reuses the ActionResult<T> shape from the
+    create/update actions (serializable result; client decides how to recover).
+  - Signature: deleteNoteAction(noteId): Promise<ActionResult<{ id: string }>>.
+    Returns the deleted id on success (useful for the editor's post-delete
+    redirect to /dashboard); an error result otherwise.
+  - GUARD ORDER (CLAUDE.md / SPEC §12): session -> ownership+SQL (ATOMIC) ->
+    revalidate. UNLIKE updateNoteAction (which does an explicit getNoteById check
+    before validating/writing because it has a Zod step in between), delete has
+    NOTHING to validate between check and write — so it calls deleteNote() ONCE
+    and branches on its boolean. deleteNote enforces ownership in its WHERE and
+    reports whether a row was removed, so check+delete are a single atomic step
+    (no TOCTOU window). Flagging so a future iter doesn't "add" a redundant
+    getNoteById ownership check and reintroduce a race.
+  - AUTHZ: a missing OR someone-else's note removes 0 rows -> false -> "Note not
+    found.", never revealing whether the id exists (SPEC §8/§14.2, 404-not-403).
+    Idempotent: re-deleting an already-gone note returns the same "not found".
+  - DECISION: uses getSession() and RETURNS an error result for the
+    unauthenticated case (not requireAuth()'s thrown redirect) — matches prd
+    "Return success/error result" + keeps the action serializable/testable.
+    Consistent with create/update actions. requireAuth() stays the PAGE gate.
+  - REVALIDATE: both /dashboard (the list loses the row) and /notes/${noteId}
+    (the now-gone editor page) so stale caches are purged after deletion. prd
+    only asks for the dashboard path; added the note path for cache correctness,
+    consistent with updateNoteAction.
+  - VERIFIED: `bun run build` PASS (TS typechecks; graph unchanged at 3 routes —
+    nothing imports the action yet), `bun run lint` PASS (clean). 6-assert
+    throwaway Bun smoke of the deleteNote repo path the action wraps
+    (DATABASE_PATH=:memory:, stub `user` + alice/bob): non-owner delete -> false +
+    note intact, missing id -> false, owner delete -> true + note gone, re-delete
+    -> false. 6/6 pass, file removed. The action wiring (getSession/
+    revalidatePath) needs a Next request scope so isn't bare-script testable; full
+    e2e arrives with the editor Delete flow. No UI in this task -> Playwright N/A.
+  - NEXT (last actions task): toggleShareAction(noteId, isPublic) — ownership +
+    setNotePublic + revalidate note page; returns updated note with publicSlug.
+    Then dashboard/editor/share UI consume create/update/delete/share.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

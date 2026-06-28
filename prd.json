@@ -250,7 +250,7 @@
       "Delete and revalidate dashboard path",
       "Return success/error result"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "actions",

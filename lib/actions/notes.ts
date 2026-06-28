@@ -12,6 +12,7 @@ import type { JSONContent } from "@tiptap/core";
 import { getSession } from "@/lib/auth";
 import {
   createNote,
+  deleteNote,
   getNoteById,
   updateNote,
   type CreateNoteInput,
@@ -106,4 +107,31 @@ export async function updateNoteAction(
   revalidatePath("/dashboard");
   revalidatePath(`/notes/${noteId}`);
   return { ok: true, data: note };
+}
+
+/**
+ * Delete a note the caller owns and return its id (SPEC §12 delete flow).
+ *
+ * Guard order: session -> ownership+SQL (atomic) -> revalidate. `deleteNote`
+ * enforces ownership in its WHERE clause and reports whether a row was actually
+ * removed, so the ownership check and the delete are a single atomic step (no
+ * TOCTOU window — unlike updateNoteAction, there's nothing to validate between a
+ * separate check and the write). A missing or someone-else's note removes 0 rows
+ * and yields "Note not found.", never revealing whether the id exists (SPEC §8,
+ * §14.2, 404-not-403). The dashboard list and the (now-gone) note page are both
+ * revalidated so stale caches are purged after deletion.
+ */
+export async function deleteNoteAction(noteId: string): Promise<ActionResult<{ id: string }>> {
+  const session = await getSession();
+  if (!session) {
+    return { ok: false, error: "You must be signed in to delete a note." };
+  }
+
+  if (!deleteNote(session.user.id, noteId)) {
+    return { ok: false, error: "Note not found." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/notes/${noteId}`);
+  return { ok: true, data: { id: noteId } };
 }
