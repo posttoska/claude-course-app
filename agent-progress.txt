@@ -1156,6 +1156,62 @@ DONE
     lib/tiptap `extensions`), landing/styling/responsive, then Vitest + Playwright
     test setup.
 
+[ui] Add delete functionality to editor — passes=true
+  - Extended components/NoteEditor.tsx (no new files) with the delete flow that
+    wraps the existing deleteNoteAction Server Action. The auth + ownership
+    re-check + the SQL stay server-side in the action; the component only drives
+    the confirm/loading/redirect UX.
+  - CONFIRMATION = native <dialog> (modern accessible browser API, not
+    window.confirm): a footer "Delete" button (red text, left of the status+Save
+    cluster — footer is now justify-between) calls dialogRef.current.showModal(),
+    which gives focus-trapping, Escape-to-close, and a ::backdrop for free. The
+    dialog shows "Delete note?" + an interpolated body ("This permanently deletes
+    "<title or Untitled note>". This can't be undone.") and Cancel / Delete
+    buttons. Chose <dialog> over a window.confirm() so it's styleable + dark-mode
+    aware (bg-background/text-foreground tokens, backdrop:bg-black/50). Flagging so
+    a future iter doesn't "simplify" it to window.confirm (loses styling/a11y).
+  - CONFIRM -> handleDelete (useCallback): cancels any pending auto-save timer
+    first (the note is going away — don't let a debounced updateNoteAction write
+    into a deleting note), setDeleting(true), await deleteNoteAction(note.id). On
+    ok -> router.push("/dashboard") + router.refresh() (refresh purges the now-
+    stale list cache so the deleted card is gone); `deleting` stays true through
+    the navigation so the buttons can't be re-fired. On error -> setDeleting(false)
+    + show result.error inside the still-open dialog (role="alert").
+  - LOADING STATE (prd "Show loading state during deletion"): both dialog buttons
+    disable while `deleting`; the confirm button label flips to "Deleting…". The
+    <dialog> onCancel preventDefault()s while deleting so Escape can't dismiss the
+    confirmation mid-action.
+  - CANCEL -> dialogRef.current.close() (only when not deleting). Reuses the same
+    "use client" component conventions as the save flow (useRef + useState, no
+    useEffect for the action). useRouter from next/navigation; deleteNoteAction
+    added to the existing import from @/lib/actions/notes.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), existing
+    session (3 seeded notes kept intact — created a THROWAWAY note to delete):
+    (1) New note -> editor; typed title "Delete me 1950" (auto-saved -> "Saved").
+    (2) Click Delete -> <dialog> opens, body reads "This permanently deletes
+    "Delete me 1950". This can't be undone.", Cancel auto-focused (focus trapped).
+    (3) Cancel -> evaluate confirms dialog.open=false, still on /notes/<id> (no
+    delete). (4) Re-open -> click confirm Delete -> redirected to /dashboard;
+    list back to "3 notes" with the throwaway gone and all 3 seeded notes intact;
+    0 console errors across the flow. (5) Navigating to the deleted note's id ->
+    404 "This page could not be found." (the 1 console error there is the expected
+    404 response, not a code bug) — confirms the row is really gone, not just
+    hidden. The "Deleting…" loading label disables the buttons in-flight (fast
+    local action, so the transition is brief).
+  - `bun run build` PASS (6 routes; /notes/[id] still ƒ Dynamic — NoteEditor +
+    deleteNoteAction bundle clean), `bun run lint` PASS (clean). `bun run test`
+    still exits 1 "No test files found" (pre-existing, NOT a regression — the
+    "Write unit tests" prd tasks author those). `bun run test:e2e` still N/A (no
+    script; "Set up Playwright" prd task pending).
+  - NOTE: the verification created + deleted a throwaway note in dev DB
+    data/app.sqlite (gitignored); the 3 seeded notes are untouched. Harmless.
+  - NEXT (editor cluster): nav/error/toasts + app/notes/[id]/loading.tsx (Back link
+    already exists on the page; this task adds 404 handling + toast notifications +
+    a loading.tsx). Then ShareToggle (toggleShareAction, public URL + copy) + copy
+    URL, /p/[slug] public viewer (@tiptap/static-renderer — NOT installed yet;
+    reuse lib/tiptap `extensions`), landing/styling/responsive, then Vitest +
+    Playwright test setup.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

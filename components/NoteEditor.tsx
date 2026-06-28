@@ -5,19 +5,21 @@
 // work and hands the already-fetched `note` here as initial data; this component
 // owns only the in-browser editing surface.
 //
-// SCOPE (this prd task adds persistence): mount the editor, a controlled title
-// input, the toolbar, AND save the note's title + content through the
-// updateNoteAction Server Action — both via a debounced auto-save (1.5s after the
-// last edit) and an explicit "Save" button — with a live status indicator
-// (Saving… / Saved / Unsaved / Couldn't save). The auth + ownership re-check + the
-// SQL stay server-side in the action; this component only drives the UX.
+// SCOPE: mount the editor, a controlled title input, the toolbar, save the note's
+// title + content through the updateNoteAction Server Action (debounced auto-save
+// 1.5s after the last edit + an explicit "Save" button) with a live status
+// indicator, AND delete the note — a Delete button opens a confirmation <dialog>,
+// confirming calls deleteNoteAction and redirects to /dashboard. The auth +
+// ownership re-checks + the SQL stay server-side in the actions; this component
+// only drives the UX.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import { extensions } from "@/lib/tiptap";
 import { EditorToolbar } from "@/components/EditorToolbar";
-import { updateNoteAction } from "@/lib/actions/notes";
+import { deleteNoteAction, updateNoteAction } from "@/lib/actions/notes";
 import type { Note } from "@/lib/notes";
 
 // Mirror TitleSchema's cap (lib/validation.ts, SPEC §13) so the input can't
@@ -41,10 +43,17 @@ const STATUS_LABEL: Record<SaveStatus, string> = {
 };
 
 export function NoteEditor({ note }: { note: Note }) {
+  const router = useRouter();
+
   // Controlled title state, initialised from the stored title (null → empty so the
   // input stays controlled and the placeholder shows).
   const [title, setTitle] = useState(note.title ?? "");
   const [status, setStatus] = useState<SaveStatus>("idle");
+
+  // Delete flow state: `deleting` drives the loading UI and disables both dialog
+  // buttons; `deleteError` surfaces a failed deletion inside the open dialog.
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Latest values read at save time. Refs (not state) so the debounced save and
   // the editor's onUpdate always see the current title/content without re-creating
@@ -52,6 +61,7 @@ export function NoteEditor({ note }: { note: Note }) {
   const titleRef = useRef<string>(note.title ?? "");
   const contentRef = useRef<JSONContent>(note.contentJson);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   // Persist the current title + content via the Server Action. Cancels any pending
   // debounce so a manual save and the timer can't double-fire. An empty title is
@@ -110,6 +120,27 @@ export function NoteEditor({ note }: { note: Note }) {
     scheduleSave();
   }
 
+  // Confirm-delete: cancel any pending auto-save (the note is going away), call the
+  // Server Action (which re-checks ownership), then redirect to the dashboard on
+  // success. `deleting` stays true through the navigation so the UI can't be used
+  // twice; on failure we re-enable and show the error inside the open dialog.
+  const handleDelete = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    setDeleteError(null);
+    setDeleting(true);
+    const result = await deleteNoteAction(note.id);
+    if (result.ok) {
+      router.push("/dashboard");
+      router.refresh();
+      return;
+    }
+    setDeleting(false);
+    setDeleteError(result.error);
+  }, [note.id, router]);
+
   // useEditor returns null on the first render under SSR (immediatelyRender:false).
   if (!editor) return null;
 
@@ -129,23 +160,75 @@ export function NoteEditor({ note }: { note: Note }) {
       <EditorToolbar editor={editor} />
       <EditorContent editor={editor} />
 
-      <div className="mt-3 flex items-center justify-end gap-3 border-t border-black/10 pt-3 dark:border-white/15">
-        <span
-          role="status"
-          aria-live="polite"
-          className={`text-xs ${status === "error" ? "text-red-600 dark:text-red-400" : "text-foreground/55"}`}
-        >
-          {STATUS_LABEL[status]}
-        </span>
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/10 pt-3 dark:border-white/15">
         <button
           type="button"
-          onClick={() => void save()}
-          disabled={saving}
-          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+          onClick={() => dialogRef.current?.showModal()}
+          className="rounded-md px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-600/10 dark:text-red-400"
         >
-          {saving ? "Saving…" : "Save"}
+          Delete
         </button>
+
+        <div className="flex items-center gap-3">
+          <span
+            role="status"
+            aria-live="polite"
+            className={`text-xs ${status === "error" ? "text-red-600 dark:text-red-400" : "text-foreground/55"}`}
+          >
+            {STATUS_LABEL[status]}
+          </span>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
       </div>
+
+      {/* Native modal confirmation (focus-trapped, Escape-to-close, ::backdrop) —
+          opened imperatively via showModal(). Closing is blocked while a delete is
+          in flight so the action can't be interrupted mid-navigation. */}
+      <dialog
+        ref={dialogRef}
+        onCancel={(event) => {
+          if (deleting) event.preventDefault();
+        }}
+        className="m-auto max-w-sm rounded-lg border border-black/10 bg-background p-6 text-foreground backdrop:bg-black/50 dark:border-white/15"
+      >
+        <h2 className="text-lg font-semibold">Delete note?</h2>
+        <p className="mt-2 text-sm text-foreground/70">
+          This permanently deletes “{title.trim() === "" ? "Untitled note" : title.trim()}”. This
+          can’t be undone.
+        </p>
+
+        {deleteError && (
+          <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+            {deleteError}
+          </p>
+        )}
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => dialogRef.current?.close()}
+            disabled={deleting}
+            className="rounded-md border border-black/15 px-4 py-2 text-sm font-medium transition-colors hover:bg-black/[.04] disabled:opacity-60 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDelete()}
+            disabled={deleting}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+      </dialog>
     </div>
   );
 }
