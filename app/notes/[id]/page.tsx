@@ -48,22 +48,19 @@ export default async function NoteEditorPage({ params }: { params: Promise<{ id:
         </Link>
       </div>
 
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {note.title?.trim() || "Untitled note"}
-        </h1>
-        <div className="flex items-center gap-3 text-xs text-foreground/55">
-          <span>Updated {formatUpdatedAt(note.updatedAt)}</span>
-          <span
-            className={
-              note.isPublic
-                ? "rounded-full bg-green-600/10 px-2 py-0.5 font-medium text-green-700 dark:text-green-400"
-                : "rounded-full bg-black/[.06] px-2 py-0.5 font-medium text-foreground/60 dark:bg-white/10"
-            }
-          >
-            {note.isPublic ? "Public" : "Private"}
-          </span>
-        </div>
+      {/* Metadata row. The note title is now the editable input inside NoteEditor,
+          so there is no separate static heading here. */}
+      <header className="mb-4 flex items-center justify-end gap-3 text-xs text-foreground/55">
+        <span>Updated {formatUpdatedAt(note.updatedAt)}</span>
+        <span
+          className={
+            note.isPublic
+              ? "rounded-full bg-green-600/10 px-2 py-0.5 font-medium text-green-700 dark:text-green-400"
+              : "rounded-full bg-black/[.06] px-2 py-0.5 font-medium text-foreground/60 dark:bg-white/10"
+          }
+        >
+          {note.isPublic ? "Public" : "Private"}
+        </span>
       </header>
 
       <NoteEditor note={note} />

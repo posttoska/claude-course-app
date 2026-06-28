@@ -345,7 +345,7 @@
       "Track title changes in state",
       "Style input appropriately"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

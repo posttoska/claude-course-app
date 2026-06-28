@@ -945,6 +945,51 @@ DONE
     viewer (@tiptap/static-renderer — NOT installed yet; reuse lib/tiptap `extensions`)
     -> landing/styling/responsive -> Vitest + Playwright test setup.
 
+[ui] Add title input to editor — passes=true
+  - Extended components/NoteEditor.tsx with a CONTROLLED title input (the prd
+    deliverable). Added `const [title, setTitle] = useState(note.title ?? "")`
+    (null -> "" keeps the input controlled + shows the placeholder), a controlled
+    <input value={title} onChange={...}> at the TOP of the editor card (above the
+    EditorContent / future toolbar mount point), and an OPTIONAL onTitleChange prop
+    (parallel to the existing onChange) so the later Save task can read the latest
+    title. State (not a ref) per the prd step "Track title changes in state".
+  - maxLength={200} mirrors TitleSchema's cap (lib/validation.ts, SPEC §13) so the
+    input can't produce a title updateNoteAction would reject. placeholder
+    "Untitled note", aria-label "Note title" (a11y — the input is the title surface,
+    not a heading). Style: w-full bg-transparent text-2xl font-semibold tracking-
+    tight placeholder:text-foreground/40 focus:outline-none (large borderless
+    Notion-style title field; foreground theme token, dark-mode aware).
+  - PAGE CHANGE (de-duplicate): app/notes/[id]/page.tsx previously rendered the
+    title as a static <h1> in its header. With the editable input now serving as the
+    title, removed that <h1> to avoid two stacked titles; KEPT the metadata row
+    (Updated <date> + Public/Private badge), now right-aligned (justify-end). The
+    page's auth/ownership/404 guard + back link are unchanged. Flagging so a future
+    iter doesn't think the page lost its heading — the title lives in the input now.
+  - SCOPE: the title is tracked in state but NOT YET PERSISTED — wiring it to
+    updateNoteAction (debounced auto-save / Save button) is the later "Implement
+    save functionality" task, which reads this title state + the contentRef. onChange
+    + onTitleChange callbacks are the hooks it will use. Flagging so a future iter
+    doesn't add a save call here.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), existing
+    session (3 seeded notes): opened "Project ideas" (/notes/<uuid>) -> the title
+    renders as a textbox aria-label "Note title" INITIALISED with "Project ideas"
+    (init-from-note.title confirmed), placeholder "Untitled note", maxLength=200
+    (matches TitleSchema), and NO duplicate <h1> (only the metadata row Updated 28
+    Jun 2026 + Public). CONTROLLED check: Ctrl+A then typed "My edited title" slowly
+    (per-keystroke onChange) -> input value became "My edited title" (state drives
+    the value). 0 console errors/warnings. The typed edit did NOT persist (no save
+    wired yet) -> note row unchanged; dev DB gitignored.
+  - `bun run build` PASS (6 routes; /notes/[id] still ƒ Dynamic, NoteEditor bundles
+    the input cleanly), `bun run lint` PASS (clean). test/test:e2e unchanged (see
+    CHECKS STATUS).
+  - NEXT (editor cluster, in order): components/EditorToolbar.tsx (bold/italic/
+    H1-3/paragraph, active state via editor.isActive) -> code+inline-code+bullet-
+    list+HR buttons -> save (updateNoteAction, debounced auto-save, status
+    indicator, skip initial load — reads the title state + contentRef from this
+    component) -> delete (confirm -> deleteNoteAction -> /dashboard) -> nav/error/
+    toasts + loading.tsx -> ShareToggle (toggleShareAction) + copy URL. Then
+    /p/[slug] public viewer, landing/styling/responsive, Vitest + Playwright setup.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
