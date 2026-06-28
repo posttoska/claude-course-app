@@ -328,6 +328,42 @@ DONE
     signIn/signOut/useSession from "@/lib/auth-client". Next suggested: the auth
     UI forms -> app/authenticate page -> Header + LogoutButton.
 
+[ui] Build sign up form component — passes=true   (FIRST UI task; opens UI phase)
+  - Created components/SignUpForm.tsx: "use client" controlled form (name/email/
+    password via useState — minimal state, no useEffect). Submits through the
+    better-auth browser client `signUp.email({ name, email, password })` from
+    @/lib/auth-client (the catch-all handler persists the user). Confirmed the
+    `{ data, error }` return shape + error.message via context7 (better-auth docs).
+  - COMPONENT API: props `{ onSuccess?: () => void }`. Per the prd step "Handle
+    success (will redirect in parent)" the form does NOT navigate itself — it
+    calls onSuccess on success and the parent (app/authenticate, a later task)
+    owns the redirect to /dashboard. Flagging so a future iter doesn't add a
+    router.push here.
+  - CLIENT-SIDE VALIDATION (fast feedback only; server stays authoritative per
+    SPEC §13): name non-empty, email matches a pragmatic regex, password >= 8
+    (MIN_PASSWORD_LENGTH = better-auth's emailAndPassword default). On failure
+    sets an inline error and returns BEFORE calling the server. Server errors are
+    surfaced from error.message into the same <p role="alert"> region.
+  - A11y/modern React: semantic <form> + <label htmlFor>/id pairs, autoComplete
+    (name/email/new-password), required + minLength, role="alert" error, inputs+
+    button disabled while pending ("Creating account…"). noValidate so our custom
+    messages show instead of native bubbles. Tailwind v4 utilities, foreground/
+    background theme tokens (dark-mode aware).
+  - VERIFIED with Playwright MCP against the LIVE dev server (existing instance on
+    :3000 — derisks the flagged Windows Bun+Next dev-server risk; it serves fine).
+    Drove a TEMP host route app/signup-smoke/page.tsx (rendered <SignUpForm
+    onSuccess={() => show "SIGNUP_OK"} />), then REMOVED it (deliverable is just
+    the component): (1) form renders Name/Email/Password + Sign up; (2) invalid
+    email -> inline alert "Please enter a valid email address." (no server call);
+    (3) valid submit -> real better-auth signup succeeds -> onSuccess fires ->
+    "SIGNUP_OK" rendered; (4) 0 console errors. `bun run build` PASS (back to 3
+    routes after temp removal), `bun run lint` PASS.
+  - NOTE: full signup writes a user row to the dev DB data/app.sqlite (gitignored)
+    — used a throwaway unique email. Harmless.
+  - NEXT: components/LoginForm.tsx (same pattern, signIn.email, no name field) ->
+    app/authenticate/page.tsx (toggles SignUpForm/LoginForm, redirects to
+    /dashboard on success) -> Header (server, getSession) + LogoutButton.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
