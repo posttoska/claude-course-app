@@ -1328,11 +1328,12 @@ CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
   bun run build     : PASS
   bun run lint      : PASS
-  bun run test      : PASS — 3 files / 23 tests. __tests__/setup.test.ts (2,
+  bun run test      : PASS — 4 files / 37 tests. __tests__/setup.test.ts (2,
                       jsdom + "@/" alias), __tests__/lib/db.test.ts (9, generic
                       helpers), __tests__/lib/notes.test.ts (12, repository surface
-                      + authz). The actions unit-test suite is still a pending prd
-                      task; it adds __tests__/actions/notes.test.ts alongside these.
+                      + authz), __tests__/actions/notes.test.ts (14, server-action
+                      guards — auth/ownership/validation/revalidate). The UNIT-TEST
+                      TRILOGY is now COMPLETE (db + notes + actions).
   bun run test:e2e  : N/A — no test:e2e script defined; Playwright not installed
                       (prd task "Set up Playwright for E2E testing" still pending).
 
@@ -1604,3 +1605,50 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     E2E testing" (install @playwright/test + browsers, add a test:e2e script +
     playwright.config.ts webServer) and the e2e specs. Presentational UI tasks
     (landing/styling/responsive) also remain.
+
+[testing] Write unit tests for server actions — passes=true
+  (COMPLETES the unit-test trilogy: db + notes + actions all passes=true. Chose
+  this foundation task over the risky Playwright setup / routine presentational UI
+  per the loop rule + prd dependency order — it formalizes coverage of the most
+  security-critical layer, the action guards.)
+  - Created __tests__/actions/notes.test.ts: 14 tests over lib/actions/notes.ts's
+    four server actions (create/update/delete/toggleShare). Runs under Node (Vitest)
+    against a REAL in-memory DB through the repo layer — the actions exercise their
+    real guard order (session -> ownership -> Zod -> SQL -> revalidate), not stubs.
+  - MOCKING (the crux): vi.mock("@/lib/auth", () => ({ getSession: vi.fn() })) so
+    (a) getSession is controllable per test (signInAs/signOut helpers drive its
+    resolved value) and (b) importing the actions NEVER loads the real lib/auth —
+    which runs better-auth's migrations in a TOP-LEVEL await against bun:sqlite,
+    unavailable under Vitest/Node (the standing "don't drive better-auth from
+    Vitest" warning). Also vi.mock("next/cache", () => ({ revalidatePath: vi.fn()}))
+    — revalidatePath throws outside a Next request scope; the mock lets the actions
+    run here AND lets us assert which paths each mutation purges. The repo layer
+    (lib/notes -> lib/db, node:sqlite fallback) is deliberately NOT mocked so the
+    DB/authz behavior is real. Flagging so a future iter doesn't "simplify" by
+    mocking lib/notes (that would gut the integration value) or un-mock lib/auth
+    (that reintroduces the bun:sqlite top-level-await import hazard under Node).
+  - ISOLATION: same :memory: pattern as the db/notes suites — DATABASE_PATH=:memory:
+    set before the first getDb(); beforeEach does vi.clearAllMocks() + closeDb() +
+    seedUsers() (stub `user` table + alice/bob for the FK + cross-owner authz).
+  - COVERAGE (prd steps): createNoteAction — signed-in creates + persists + owner
+    scoping + revalidates /dashboard; honors title/content; unauthenticated ->
+    error + no DB touch; invalid contentJson (type!="doc") -> "Invalid note data.".
+    updateNoteAction — owner update applies + revalidates /dashboard + /notes/:id;
+    NON-OWNER -> "Note not found." + note untouched + no revalidate (404-not-403);
+    unauthenticated -> error. deleteNoteAction — owner deletes + gone + revalidate;
+    non-owner -> "Note not found." + note survives; unauthenticated -> error.
+    toggleShareAction — enable mints slug + getNoteByPublicSlug reachable +
+    revalidates /p/:slug; disable KEEPS slug but public lookup 404s (is_public=1
+    gate, SPEC §10.2); non-owner -> error + stays private; unauthenticated -> error.
+  - No `any` (session built + cast once via SessionResult helper), no unused imports.
+  - VERIFIED: `bun run test` PASS (4 files / 37 tests; +14 from this file),
+    `bun run lint` PASS (clean), `bun run build` PASS (7 routes — graph unchanged,
+    tests aren't bundled; tsconfig includes **/*.ts so the build also typechecked
+    the new test file clean). No UI in this task -> Playwright MCP N/A.
+    `bun run test:e2e` still N/A (no script; "Set up Playwright" prd task pending).
+  - NEXT (testing): "Set up Playwright for E2E testing" — the risky integration:
+    bun add -d @playwright/test + `bunx playwright install` browsers, add a test:e2e
+    script + playwright.config.ts with a webServer (bun --bun next dev/start) on
+    Windows (watch for the flagged Bun+Next dev-server flakiness), e2e/ dir +
+    auth/db helpers. It unblocks the 4 e2e spec tasks (auth/notes/sharing/responsive).
+    Also still open: 3 presentational UI tasks (landing/styling/responsive).

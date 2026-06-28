@@ -534,7 +534,7 @@
       "Test deleteNoteAction validates ownership",
       "Test toggleShareAction updates correctly"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",
