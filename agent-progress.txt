@@ -105,6 +105,30 @@ DONE
     url-safe / unique, full row->Note mapping incl. 0->false). `bun run build`
     PASS (typechecks), `bun run lint` PASS.
 
+[database] Implement createNote repository function — passes=true
+  - Appended createNote() to lib/notes.ts (first repository fn; mapper/helpers
+    from the previous iter live in the same file). Imports `run` from lib/db.
+  - Signature: `async createNote(userId, data?: CreateNoteInput): Promise<Note>`
+    where CreateNoteInput = { title?: string; contentJson?: JSONContent }.
+    Async per the prd wording (the later get/update/delete repo fns stay sync —
+    DB driver is sync; the actions layer wraps all of them).
+  - Behavior: id = crypto.randomUUID() (global in Bun + Node); created_at ===
+    updated_at = new Date().toISOString(); is_public 0 / public_slug NULL
+    (private until shared). Defaults: title -> "Untitled note" (prd; note SPEC
+    §5.4 prefers nullable/derived — prd wins here), content -> structuredClone of
+    EMPTY_TIPTAP_DOC (clone so the returned doc is mutable; the shared const
+    stays frozen). Content stored as JSON.stringify (never raw HTML, SPEC §5.3).
+  - INSERT is parameterized ($name binds) and scoped to user_id = userId. Returns
+    the Note constructed from the inserted values (no extra round-trip SELECT).
+  - VERIFIED: 22-assert Bun smoke test (DATABASE_PATH=:memory:, stub `user` table
+    + row for the FK): uuid id, user scoping, both defaults, mutable returned
+    content, isPublic/publicSlug, equal timestamps, row persisted snake_case +
+    stringified content round-trips, custom title/content, unique ids, FK rejects
+    unknown user, EMPTY_TIPTAP_DOC still frozen after call. All 22 pass under Bun.
+    (Node node:sqlite path not re-smoked: throwaway harness used bare specifiers
+    Node ESM won't resolve — code is driver-agnostic; Vitest will cover Node.)
+    `bun run build` PASS, `bun run lint` PASS. Smoke file removed.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
@@ -120,21 +144,33 @@ CHECKS STATUS (whole repo)
 NEXT / NOTES FOR FUTURE ITERATIONS
 --------------------------------------------------------------------------------
   - Suggested next (in rough dependency order):
-      1. "Create SQLite database with better-auth schema" — already DONE by
-         lib/auth.ts migrations; just verify the 4 tables + mark passes=true.
-      2. "Define Note type and create helper functions (lib/notes.ts)" — map
-         snake_case rows -> camelCase Note (contentJson/publicSlug/isPublic),
-         generatePublicSlug() (nanoid 16+; nanoid is NOT yet a dep — `bun add`
-         it or use crypto.randomUUID()/getRandomValues), default empty TipTap
-         JSON const { type:"doc", content:[{ type:"paragraph" }] }. The notes
-         table now exists (this iteration).
-      3. "Create better-auth API route" — app/api/auth/[...all]/route.ts:
-         `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
-      4. "Implement server-side auth helpers" — getSession()/requireAuth() wrapping
-         auth.api.getSession({ headers: await headers() }).
-      5. "Create auth client for frontend" — lib/auth-client.ts (createAuthClient).
-      6. Then the repository fns (createNote/getNoteById/getNotesByUser/updateNote/
-         deleteNote/setNotePublic/getNoteByPublicSlug) on top of lib/notes.ts.
+      1. "Implement getNoteById and getNotesByUser functions" — append to
+         lib/notes.ts (sync). getNoteById(userId, noteId): SELECT ... WHERE id=$id
+         AND user_id=$uid -> mapRowToNote or null (authz baked into the WHERE; null
+         => caller does notFound(), SPEC §8). getNotesByUser(userId): SELECT ...
+         WHERE user_id=$uid ORDER BY updated_at DESC -> Note[].
+      2. "Implement updateNote function" — partial title/contentJson, bump
+         updated_at = new Date().toISOString(), WHERE id=$id AND user_id=$uid,
+         return updated Note or null. Re-SELECT after UPDATE to build the Note.
+      3. "Implement deleteNote function" — DELETE WHERE id=$id AND user_id=$uid,
+         return run().changes > 0 (boolean).
+      4. "Implement note sharing functions" — setNotePublic(userId, noteId,
+         isPublic): on enable, generatePublicSlug() if public_slug is NULL + set
+         is_public=1; on disable, set is_public=0 (KEEP the slug, SPEC §10.2).
+         getNoteByPublicSlug(slug): SELECT ... WHERE public_slug=$s AND is_public=1
+         (public route, no userId). NOTE: prd's slug task says "clear public_slug
+         when disabling" but SPEC §10.2 says keep it so re-share reuses the link —
+         resolve this conflict before implementing (recommend: keep, per SPEC).
+      5. Auth wiring (foundation, needed before any auth UI):
+         - "Create better-auth API route" — app/api/auth/[...all]/route.ts:
+           `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
+         - "Implement server-side auth helpers" — getSession()/requireAuth()
+           wrapping auth.api.getSession({ headers: await headers() }).
+         - "Create auth client for frontend" — lib/auth-client.ts (createAuthClient).
+  - REPO-FN CONVENTION (set by createNote this iter): createNote is async per prd;
+    the read/update/delete/share fns can stay SYNC (driver is sync). All return
+    Note | Note[] | boolean and bake ownership into the WHERE clause. Reuse
+    run()/get()/query() from lib/db and mapRowToNote() from lib/notes.
   - lib/db.ts deliberately does NOT create any tables; auth tables come from
     better-auth migrations (now wired in lib/auth.ts on cold start).
   - When wiring the notes table, follow SPEC §5 (notes columns) and reuse

@@ -12,6 +12,7 @@
 
 import { nanoid } from "nanoid";
 import type { JSONContent } from "@tiptap/core";
+import { run } from "./db";
 
 /** A note as the rest of the app consumes it: camelCase, `contentJson` parsed. */
 export type Note = {
@@ -70,5 +71,54 @@ export function mapRowToNote(row: NoteRow): Note {
     publicSlug: row.public_slug,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+/** Default title for a note created without an explicit one (prd: data-layer default). */
+const DEFAULT_NOTE_TITLE = "Untitled note";
+
+/** Optional fields a caller may supply when creating a note. */
+export type CreateNoteInput = {
+  title?: string;
+  contentJson?: JSONContent;
+};
+
+/**
+ * Create a note owned by `userId` and return it (SPEC §12 create flow).
+ *
+ * App-generated UUID id, ISO timestamps (created_at === updated_at on insert),
+ * `is_public = 0` / no `public_slug` (private until shared). Defaults: title ->
+ * "Untitled note", content -> an empty TipTap doc. Content is stored as a JSON
+ * string (never raw HTML — SPEC §5.3); the returned `Note` carries the parsed
+ * object. The INSERT is parameterized and scoped to `user_id = userId`.
+ */
+export async function createNote(userId: string, data?: CreateNoteInput): Promise<Note> {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const title = data?.title ?? DEFAULT_NOTE_TITLE;
+  // Clone the shared (frozen) default so the returned note's content is mutable.
+  const contentJson = data?.contentJson ?? structuredClone(EMPTY_TIPTAP_DOC);
+
+  run(
+    `INSERT INTO notes (id, user_id, title, content_json, is_public, public_slug, created_at, updated_at)
+     VALUES ($id, $userId, $title, $contentJson, 0, NULL, $now, $now)`,
+    {
+      $id: id,
+      $userId: userId,
+      $title: title,
+      $contentJson: JSON.stringify(contentJson),
+      $now: now,
+    },
+  );
+
+  return {
+    id,
+    userId,
+    title,
+    contentJson,
+    isPublic: false,
+    publicSlug: null,
+    createdAt: now,
+    updatedAt: now,
   };
 }

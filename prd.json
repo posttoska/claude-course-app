@@ -60,7 +60,7 @@
       "INSERT with user_id scoping",
       "Return created Note"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",
