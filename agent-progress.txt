@@ -624,6 +624,42 @@ DONE
     Login/Sign up when logged out, Dashboard link + <LogoutButton/> when logged
     in; add to app/layout.tsx. Then dashboard page + NoteList + CreateNoteButton.
 
+[ui] Add app header with auth state — passes=true
+  - components/Header.tsx (async Server Component) + wired into app/layout.tsx so
+    it renders once above EVERY page. Reads the authoritative session via
+    getSession() (lib/auth, SPEC §7.5) so first paint matches reality (no client
+    flash). App name "Notes" always links to "/".
+  - SIGNED-OUT: "Log in" + "Sign up" links, both -> /authenticate (the prd's single
+    auth page that toggles login/signup; SPEC's split /login,/signup don't exist).
+  - SIGNED-IN: "Dashboard" link (-> /dashboard) + <LogoutButton/> (the existing
+    "use client" leaf from the logout task; Header just composes it). This SATISFIES
+    the deferred "Add to Header" sub-step from the LogoutButton iter.
+  - Header itself is a Server Component (no "use client"); only the LogoutButton
+    island is client. Turbopack note holds: Header imports lib/auth -> lib/db, so it
+    pulls the data layer into the layout bundle — builds clean via getBuiltinModule
+    (don't revert to dynamic require).
+  - STYLE: max-w-5xl nav, foreground/background theme tokens, dark-mode-aware
+    hover/borders, responsive gap/padding (sm:). Tailwind v4 utilities only.
+  - VERIFIED with Playwright MCP against the live dev server (:3000): (1) signed-out
+    "/" -> Notes/Log in/Sign up, 0 console errors; (2) signed up a fresh user
+    (ralph-header-0628@example.com) -> redirected to /dashboard (404, later task) ->
+    Header now shows Notes/Dashboard/Log out; (3) clicked Log out -> redirect to "/"
+    -> Header reverted to Log in/Sign up. The ONLY console error throughout was the
+    expected /dashboard 404 (page not built yet); the 2 warnings are the default
+    skeleton landing SVGs (next.svg/vercel.svg), not Header. `bun run build` PASS
+    (4 routes), `bun run lint` PASS (clean).
+  - BUILD HAZARD (env, not code): a first `bun run build` failed with
+    SQLITE_BUSY_RECOVERY "database is locked" during page-data collection (15
+    parallel workers each cold-starting auth migrations contend on the WAL). A
+    plain re-run PASSED. If a future build fails on a DB lock, just re-run — it's
+    transient WAL contention, not a regression.
+  - NOTE: signup wrote a user row to dev DB data/app.sqlite (gitignored), throwaway
+    unique email. Harmless.
+  - NEXT: the dashboard cluster — app/dashboard/page.tsx (RSC, requireAuth +
+    getNotesByUser) + components/NoteList.tsx + components/CreateNoteButton.tsx +
+    dashboard loading/error states. Then the /notes/[id] editor (TipTap, needs
+    lib/tiptap.ts) and /p/[slug] public viewer, then the test setup tasks.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

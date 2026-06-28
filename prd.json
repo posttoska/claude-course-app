@@ -203,7 +203,7 @@
       "Show Dashboard link and Logout button when authenticated",
       "Add to app/layout.tsx"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
