@@ -1089,6 +1089,73 @@ DONE
     (@tiptap/static-renderer — NOT installed yet; reuse lib/tiptap `extensions`),
     landing/styling/responsive, then Vitest + Playwright test setup.
 
+[ui] Implement save functionality — passes=true
+  - Extended components/NoteEditor.tsx (no new files) to PERSIST the note via the
+    existing updateNoteAction Server Action — the editor was display-only until now
+    (every prior editor iter noted "edits don't persist yet"). This wires title +
+    content through to SQLite. The auth/ownership re-check + the UPDATE stay
+    server-side in updateNoteAction; the component only drives the save UX.
+  - DEBOUNCED AUTO-SAVE: a single saveTimerRef-based debounce (AUTOSAVE_DELAY_MS =
+    1500, within prd's 1–2s). Both the editor's onUpdate (content) and the title
+    input's onChange call scheduleSave(), which clears+rearms the timer; 1.5s after
+    the LAST edit it fires save(). save() reads the latest title/content from REFS
+    (titleRef/contentRef), not state closures, so it always persists current values
+    without stale-closure bugs or re-creating callbacks per keystroke.
+  - MANUAL SAVE button: calls save() directly, which first clears any pending
+    debounce timer so the timer and the click can't double-write. Disabled (+
+    "Saving…") while in flight.
+  - STATUS INDICATOR (role="status" aria-live="polite"): SaveStatus =
+    idle|unsaved|saving|saved|error -> "" / "Unsaved changes" / "Saving…" / "Saved"
+    / "Couldn't save" (error in red). prd asked for saving/saved/error; added
+    unsaved/idle for clarity (idle = blank on load).
+  - NO SAVE ON INITIAL LOAD (prd requirement): scheduleSave is wired ONLY to
+    genuine user events (title keystroke / editor transaction). TipTap does NOT
+    fire onUpdate for the initial `content` config, and the title input only
+    changes on user input, so a freshly loaded note never schedules a save —
+    verified empirically (see below). Also clears the pending timer on unmount
+    (useEffect cleanup) so navigating away mid-edit can't fire a save into a gone
+    component.
+  - EMPTY TITLE -> null: save() sends title.trim()===""? null : trimmed, so
+    clearing the title clears the column (list falls back to "Untitled note");
+    matches UpdateNoteSchema (TitleSchema.nullable, SPEC §5.4 / §13). contentJson =
+    contentRef.current (editor.getJSON(), a type:"doc" doc — passes NoteContentSchema
+    shape + 1MB cap). updateNoteAction returns ActionResult; ok -> "Saved", else
+    "Couldn't save" (status only — no thrown redirect across the boundary).
+  - API CLEANUP: removed NoteEditor's now-dead optional onChange/onTitleChange
+    props (the page never passed them; the component self-saves now). Only consumer
+    is app/notes/[id]/page.tsx, which mounts <NoteEditor note={note} /> unchanged.
+    Flagging so a future iter doesn't think those hooks went missing — superseded by
+    internal save.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), existing
+    session, opened an owned note (e2adfa59-…):
+      * AUTO-SAVE TRANSITION (recorded via a status MutationObserver while editing
+        the title): ["Saved","Unsaved changes","Saving…","Saved"] — the full
+        dirty->debounce->persist cycle.
+      * PERSISTENCE (reload): title input came back "Transition test 1945" and the
+        editor body "Persisted body text from autosave test." — both the title AND
+        content auto-saved survived a full page reload (real DB write through
+        updateNoteAction, not just client state).
+      * NO INITIAL-LOAD SAVE: on a fresh load, initial status = "" and a 2.5s
+        MutationObserver saw NO status change with zero interaction
+        (statusChangedWithoutEdit: null) — confirms autosave doesn't fire on load.
+      * MANUAL SAVE: edit-then-immediate-click went ""->"Saving…"->"Saved"
+        (cancelled the pending debounce, wrote once).
+      * 0 console errors / 0 warnings across the whole flow.
+  - `bun run build` PASS (6 routes; /notes/[id] still ƒ Dynamic — NoteEditor +
+    updateNoteAction bundle clean; importing the "use server" action into the
+    client editor is the standard pattern, no Turbopack issue), `bun run lint` PASS.
+    `bun run test` still exits 1 "No test files found" (pre-existing, NOT a
+    regression — the "Write unit tests" prd tasks author those). `bun run test:e2e`
+    still N/A (no script; "Set up Playwright" prd task pending).
+  - NOTE: the verification wrote title/content to the dev DB data/app.sqlite
+    (gitignored) on the e2adfa59 throwaway note. Harmless.
+  - NEXT (editor cluster, in order): delete (confirm dialog -> deleteNoteAction ->
+    redirect /dashboard + loading state) -> nav/error/toasts + app/notes/[id]/
+    loading.tsx -> ShareToggle (toggleShareAction, public URL + copy) + copy URL.
+    Then /p/[slug] public viewer (@tiptap/static-renderer — NOT installed yet; reuse
+    lib/tiptap `extensions`), landing/styling/responsive, then Vitest + Playwright
+    test setup.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

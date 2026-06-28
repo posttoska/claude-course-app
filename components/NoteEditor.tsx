@@ -5,41 +5,81 @@
 // work and hands the already-fetched `note` here as initial data; this component
 // owns only the in-browser editing surface.
 //
-// SCOPE (this prd task): mount the editor, initialise it with the note's stored
-// content, track edits, AND expose a controlled title input. The toolbar and
-// save/delete/share wiring are later prd tasks that extend this same component —
-// the editor instance, the tracked content, and the title state below are what
-// they build on.
+// SCOPE (this prd task adds persistence): mount the editor, a controlled title
+// input, the toolbar, AND save the note's title + content through the
+// updateNoteAction Server Action — both via a debounced auto-save (1.5s after the
+// last edit) and an explicit "Save" button — with a live status indicator
+// (Saving… / Saved / Unsaved / Couldn't save). The auth + ownership re-check + the
+// SQL stay server-side in the action; this component only drives the UX.
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import { extensions } from "@/lib/tiptap";
 import { EditorToolbar } from "@/components/EditorToolbar";
+import { updateNoteAction } from "@/lib/actions/notes";
 import type { Note } from "@/lib/notes";
 
 // Mirror TitleSchema's cap (lib/validation.ts, SPEC §13) so the input can't
 // produce a title the save action would reject.
 const TITLE_MAX_LENGTH = 200;
 
-export function NoteEditor({
-  note,
-  onChange,
-  onTitleChange,
-}: {
-  note: Note;
-  /** Optional callback fired with the latest doc on every edit. */
-  onChange?: (content: JSONContent) => void;
-  /** Optional callback fired with the latest title on every keystroke. */
-  onTitleChange?: (title: string) => void;
-}) {
-  // Controlled title state, initialised from the stored title (null → empty so the
-  // input stays controlled and the placeholder shows). The save task reads this.
-  const [title, setTitle] = useState(note.title ?? "");
+// Debounce window for auto-save: long enough to coalesce a burst of typing into
+// one write, short enough to feel responsive (prd: 1–2 second delay).
+const AUTOSAVE_DELAY_MS = 1500;
 
-  // Latest editor content, refreshed on every change. The save task reads this to
-  // persist without re-querying the editor; a ref avoids re-rendering on keystroke.
+// Save lifecycle the status indicator reflects. "unsaved" = an edit is pending
+// (debounce running); the rest are self-explanatory.
+type SaveStatus = "idle" | "unsaved" | "saving" | "saved" | "error";
+
+const STATUS_LABEL: Record<SaveStatus, string> = {
+  idle: "",
+  unsaved: "Unsaved changes",
+  saving: "Saving…",
+  saved: "Saved",
+  error: "Couldn't save",
+};
+
+export function NoteEditor({ note }: { note: Note }) {
+  // Controlled title state, initialised from the stored title (null → empty so the
+  // input stays controlled and the placeholder shows).
+  const [title, setTitle] = useState(note.title ?? "");
+  const [status, setStatus] = useState<SaveStatus>("idle");
+
+  // Latest values read at save time. Refs (not state) so the debounced save and
+  // the editor's onUpdate always see the current title/content without re-creating
+  // callbacks or re-rendering on every keystroke.
+  const titleRef = useRef<string>(note.title ?? "");
   const contentRef = useRef<JSONContent>(note.contentJson);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persist the current title + content via the Server Action. Cancels any pending
+  // debounce so a manual save and the timer can't double-fire. An empty title is
+  // sent as null so the column clears (the list falls back to "Untitled note").
+  const save = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    setStatus("saving");
+    const trimmed = titleRef.current.trim();
+    const result = await updateNoteAction(note.id, {
+      title: trimmed === "" ? null : trimmed,
+      contentJson: contentRef.current,
+    });
+    setStatus(result.ok ? "saved" : "error");
+  }, [note.id]);
+
+  // Mark the note dirty and (re)arm the debounce. Only ever called from genuine
+  // user edits (title keystrokes / editor transactions), so the initial load
+  // never triggers a save — TipTap doesn't fire onUpdate for the initial content.
+  const scheduleSave = useCallback(() => {
+    setStatus("unsaved");
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void save();
+    }, AUTOSAVE_DELAY_MS);
+  }, [save]);
 
   const editor = useEditor({
     extensions,
@@ -51,20 +91,29 @@ export function NoteEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      const content = editor.getJSON();
-      contentRef.current = content;
-      onChange?.(content);
+      contentRef.current = editor.getJSON();
+      scheduleSave();
     },
   });
+
+  // Clear any pending debounce if the editor unmounts mid-edit (e.g. navigation).
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   function handleTitleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const next = event.target.value;
     setTitle(next);
-    onTitleChange?.(next);
+    titleRef.current = next;
+    scheduleSave();
   }
 
   // useEditor returns null on the first render under SSR (immediatelyRender:false).
   if (!editor) return null;
+
+  const saving = status === "saving";
 
   return (
     <div className="rounded-lg border border-black/10 px-4 py-3 dark:border-white/15">
@@ -79,6 +128,24 @@ export function NoteEditor({
       />
       <EditorToolbar editor={editor} />
       <EditorContent editor={editor} />
+
+      <div className="mt-3 flex items-center justify-end gap-3 border-t border-black/10 pt-3 dark:border-white/15">
+        <span
+          role="status"
+          aria-live="polite"
+          className={`text-xs ${status === "error" ? "text-red-600 dark:text-red-400" : "text-foreground/55"}`}
+        >
+          {STATUS_LABEL[status]}
+        </span>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
     </div>
   );
 }

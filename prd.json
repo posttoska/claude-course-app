@@ -380,7 +380,7 @@
       "Show save status indicator (saving/saved/error)",
       "Don't trigger auto-save on initial load"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
