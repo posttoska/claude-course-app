@@ -27,6 +27,28 @@ DONE
   - Verified: dual-runtime smoke test (Bun + Node, all asserts pass), tsc via
     `bun run build` (OK), `bun run lint` (clean).
 
+[auth] Configure better-auth server (lib/auth.ts)  — passes=true
+  - Created lib/auth.ts: single betterAuth() instance, the authoritative server
+    auth surface. emailAndPassword enabled; nextCookies() plugin last (forwards
+    Set-Cookie from server-side calls/actions). secret + baseURL auto-read from
+    BETTER_AUTH_SECRET / BETTER_AUTH_URL env.
+  - DB: passes the SHARED handle from getDb() (SPEC §6 "one file, two consumers").
+    Cast to bun:sqlite Database type (driver-agnostic getDb() returns the real
+    bun:sqlite instance under the Bun runtime, which better-auth supports natively).
+  - Migrations: better-auth never auto-migrates, so on cold start we run them
+    programmatically — getMigrations(auth.options) -> runMigrations() (idempotent),
+    imported from "better-auth/db/migration". Guarded by NEXT_PHASE !==
+    "phase-production-build" so `next build` does no DB work.
+  - Verified end-to-end via a throwaway Bun smoke test (since vitest/Node can't
+    drive bun:sqlite-backed auth): migrations create all 4 tables (user, session,
+    account, verification); getSession(no cookie) -> null; signUpEmail persists a
+    user row + an account row (providerId "credential", hash in account not user).
+    Smoke file + its DB removed after. `bun run build` PASS (auth.ts typechecks:
+    cast + top-level await OK), `bun run lint` PASS.
+  - NOTE for next iteration: this ALSO created the better-auth schema, so the prd
+    task "Create SQLite database with better-auth schema" is now trivially
+    satisfiable — just verify the 4 tables exist and mark it passes=true.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
@@ -40,11 +62,21 @@ CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
 NEXT / NOTES FOR FUTURE ITERATIONS
 --------------------------------------------------------------------------------
-  - Suggested next: notes table schema (prd "Create notes table with indexes")
-    and better-auth config (prd "Configure better-auth server"), both of which
-    import the shared handle from lib/db.ts.
-  - lib/db.ts deliberately does NOT create any tables (that's per-table tasks):
-    notes schema -> its own task; auth tables -> better-auth migrations.
-  - When wiring tables, follow SPEC §5 (notes columns) and reuse getDb()/run().
-  - Vitest will run under Node, so keep server data code driver-agnostic (the
-    node:sqlite fallback in lib/db.ts already handles this).
+  - Suggested next (in rough dependency order):
+      1. "Create SQLite database with better-auth schema" — already DONE by
+         lib/auth.ts migrations; just verify the 4 tables + mark passes=true.
+      2. "Create better-auth API route" — app/api/auth/[...all]/route.ts:
+         `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
+      3. "Implement server-side auth helpers" — getSession()/requireAuth() wrapping
+         auth.api.getSession({ headers: await headers() }).
+      4. "Create auth client for frontend" — lib/auth-client.ts (createAuthClient).
+      5. "Create notes table with indexes" — SPEC §5.2; the FK references user(id),
+         which now exists, so inserts will pass FK checks.
+  - lib/db.ts deliberately does NOT create any tables; auth tables come from
+    better-auth migrations (now wired in lib/auth.ts on cold start).
+  - When wiring the notes table, follow SPEC §5 (notes columns) and reuse
+    getDb()/run().
+  - Vitest runs under Node, so keep server data code driver-agnostic (the
+    node:sqlite fallback in lib/db.ts handles this). NOTE: better-auth itself is
+    backed by bun:sqlite under the app runtime; do NOT try to drive auth flows
+    from vitest/Node — verify auth via Bun (smoke script or e2e) instead.

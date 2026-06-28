@@ -119,7 +119,7 @@
       "Configure session management",
       "Export auth instance"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "auth",
