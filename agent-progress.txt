@@ -1212,6 +1212,74 @@ DONE
     reuse lib/tiptap `extensions`), landing/styling/responsive, then Vitest +
     Playwright test setup.
 
+[ui] Add navigation and error handling to editor — passes=true
+  (COMPLETES the /notes/[id] editor cluster. 4 sub-steps: Back link (already on the
+  page), 404 handling, toasts, loading.tsx — built the 3 missing pieces.)
+  - TOAST SYSTEM (new, app-wide + reusable): components/Toast.tsx ("use client") —
+    a dependency-free <ToastProvider> + useToast() hook. Provider holds a toasts[]
+    array, exposes toast(message, variant?) (variant "success"|"error"), renders a
+    fixed bottom-center aria-live region (role="region" aria-label="Notifications")
+    of stacked toasts that auto-dismiss after 3s (also a manual ✕). Theme-token
+    styled (success = inverted bg-foreground/text-background like the primary
+    buttons; error = bg-red-600/white), dark-mode aware. Wired into app/layout.tsx
+    wrapping <Header/> + {children}, so it's available on every page (ShareToggle,
+    the NEXT task, can reuse it). NOTE: the provider is a client component but takes
+    the server-rendered Header/children as `children` props, so pages stay
+    server-rendered (no forced "use client" cascade) — build still 6 ƒ routes.
+  - EDITOR TOASTS (components/NoteEditor.tsx): added useToast(). save() now takes
+    `{ manual }`: a SUCCESS toast ("Note saved") fires ONLY on an explicit Save
+    click — auto-save runs ~every 1.5s while typing, so a per-autosave success toast
+    would be spam; the existing inline status indicator (Saving…/Saved) covers
+    autosave. A FAILURE always toasts (save error + delete error → result.error or a
+    fallback). Delete SUCCESS does NOT toast — it redirects to /dashboard and the
+    component unmounts before a toast could be seen; the redirect is the feedback.
+    Delete failure keeps the user on the page, so it toasts AND keeps the inline
+    dialog alert. Flagging the manual-only-success-toast decision so a future iter
+    doesn't "fix" autosave to also toast (that's the spam we avoided).
+  - GRACEFUL 404 (app/notes/[id]/not-found.tsx, new): the page already calls
+    notFound() (missing OR non-owned note — indistinguishable, SPEC §8/§14.2: 404
+    not 403). This adds an on-brand 404 segment ("404" / "Note not found" / "This
+    note doesn't exist, or you don't have access to it." + a "← Back to dashboard"
+    primary button) instead of Next's bare default. Server Component, theme tokens.
+  - LOADING (app/notes/[id]/loading.tsx, new): Suspense skeleton shown while the
+    dynamic, DB-backed editor page awaits requireAuth()+getNoteById(). Server
+    Component mirroring page.tsx/NoteEditor layout EXACTLY (max-w-3xl shell, back-link
+    placeholder, right-aligned metadata row, editor card with a title bar, a row of 8
+    toolbar-button squares, 5 tapering content lines, footer with Delete+Save
+    placeholders) so there's no layout shift; animate-pulse on black/white-alpha
+    blocks, aria-busy + sr-only "Loading note…".
+  - BACK LINK: "← Back to dashboard" already lives at the top of
+    app/notes/[id]/page.tsx (added with the editor-page shell) — this sub-step was
+    already satisfied; no change needed.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), existing
+    session (3 seeded notes): (1) TOAST region present in the DOM on every page
+    (dashboard + editor). (2) MANUAL SAVE — opened a note, clicked Save; a
+    MutationObserver on the Notifications region captured ["Note saved\n✕"] →
+    success toast fires + auto-dismisses. (3) AUTO-SAVE NO-SPAM — reset the observer
+    log, edited the title, waited 3s: status indicator went to "Saved" but the toast
+    log stayed EMPTY → autosave persists silently (no success toast), exactly as
+    designed. (4) GRACEFUL 404 — navigated to /notes/00000000-…-000000000000 →
+    rendered the not-found.tsx ("404" / "Note not found" / explanatory copy / Back
+    to dashboard link), 0 console errors. (5) LOADING SKELETON — rendered via a TEMP
+    host route app/editor-loading-smoke/page.tsx (imported + rendered the loading
+    default), screenshotted (editor-loading-smoke.png), confirmed the title/toolbar/
+    content/footer skeleton matches the editor layout, then REMOVED the temp route +
+    png. 0 console errors across the whole flow.
+  - NOTE: the manual-save + title-edit verification wrote to the dev DB
+    data/app.sqlite (gitignored) on the e2adfa59 throwaway note. Harmless.
+  - `bun run build` PASS (6 routes after temp removal; /notes/[id] still ƒ Dynamic;
+    ToastProvider in the layout + NoteEditor toasts bundle clean), `bun run lint`
+    PASS (clean, exit 0). `bun run test` still exits 1 "No test files found"
+    (pre-existing, NOT a regression — the "Write unit tests" prd tasks author those).
+    `bun run test:e2e` still N/A (no script; "Set up Playwright" prd task pending).
+  - NEXT: SHARING UI — components/ShareToggle.tsx ("use client", toggle public/
+    private via toggleShareAction, show the public /p/[slug] URL when enabled; can
+    reuse the new useToast for feedback) → copy-URL (navigator.clipboard + "Copied!"
+    feedback) → app/p/[slug]/page.tsx public RSC (getNoteByPublicSlug → notFound) +
+    components/PublicNoteViewer.tsx (@tiptap/static-renderer — NOT installed yet;
+    reuse lib/tiptap `extensions`). Then landing/styling/responsive, then the Vitest
+    + Playwright test-setup tasks.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------

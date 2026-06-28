@@ -403,7 +403,7 @@
       "Show toast notifications for save/delete results",
       "Create loading.tsx for editor page"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

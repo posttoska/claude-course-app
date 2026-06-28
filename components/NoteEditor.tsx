@@ -19,6 +19,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import { extensions } from "@/lib/tiptap";
 import { EditorToolbar } from "@/components/EditorToolbar";
+import { useToast } from "@/components/Toast";
 import { deleteNoteAction, updateNoteAction } from "@/lib/actions/notes";
 import type { Note } from "@/lib/notes";
 
@@ -44,6 +45,7 @@ const STATUS_LABEL: Record<SaveStatus, string> = {
 
 export function NoteEditor({ note }: { note: Note }) {
   const router = useRouter();
+  const toast = useToast();
 
   // Controlled title state, initialised from the stored title (null → empty so the
   // input stays controlled and the placeholder shows).
@@ -66,19 +68,32 @@ export function NoteEditor({ note }: { note: Note }) {
   // Persist the current title + content via the Server Action. Cancels any pending
   // debounce so a manual save and the timer can't double-fire. An empty title is
   // sent as null so the column clears (the list falls back to "Untitled note").
-  const save = useCallback(async () => {
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-    setStatus("saving");
-    const trimmed = titleRef.current.trim();
-    const result = await updateNoteAction(note.id, {
-      title: trimmed === "" ? null : trimmed,
-      contentJson: contentRef.current,
-    });
-    setStatus(result.ok ? "saved" : "error");
-  }, [note.id]);
+  //
+  // Toasts: a SUCCESS toast only for an explicit Save click (`manual`) — auto-save
+  // fires ~every 1.5s while typing, so a per-save success toast would be spam; the
+  // inline status indicator covers it. A FAILURE always toasts (rare + important).
+  const save = useCallback(
+    async ({ manual = false }: { manual?: boolean } = {}) => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      setStatus("saving");
+      const trimmed = titleRef.current.trim();
+      const result = await updateNoteAction(note.id, {
+        title: trimmed === "" ? null : trimmed,
+        contentJson: contentRef.current,
+      });
+      if (result.ok) {
+        setStatus("saved");
+        if (manual) toast("Note saved");
+      } else {
+        setStatus("error");
+        toast(result.error || "Couldn't save note", "error");
+      }
+    },
+    [note.id, toast],
+  );
 
   // Mark the note dirty and (re)arm the debounce. Only ever called from genuine
   // user edits (title keystrokes / editor transactions), so the initial load
@@ -133,13 +148,17 @@ export function NoteEditor({ note }: { note: Note }) {
     setDeleting(true);
     const result = await deleteNoteAction(note.id);
     if (result.ok) {
+      // Success feedback is the redirect itself; a toast here would unmount before
+      // it could be seen. Failures keep the user on the page, so they toast (and
+      // also surface inline in the still-open dialog).
       router.push("/dashboard");
       router.refresh();
       return;
     }
     setDeleting(false);
     setDeleteError(result.error);
-  }, [note.id, router]);
+    toast(result.error || "Couldn't delete note", "error");
+  }, [note.id, router, toast]);
 
   // useEditor returns null on the first render under SSR (immediatelyRender:false).
   if (!editor) return null;
@@ -179,7 +198,7 @@ export function NoteEditor({ note }: { note: Note }) {
           </span>
           <button
             type="button"
-            onClick={() => void save()}
+            onClick={() => void save({ manual: true })}
             disabled={saving}
             className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
           >
