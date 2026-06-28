@@ -190,7 +190,7 @@
       "Redirect to /dashboard after successful auth",
       "Style page layout"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

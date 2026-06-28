@@ -395,6 +395,42 @@ DONE
   - NEXT: app/authenticate/page.tsx (toggles SignUpForm/LoginForm, redirects to
     /dashboard on success) -> Header (server, getSession) + LogoutButton.
 
+[ui] Create authentication page — passes=true
+  - Created app/authenticate/page.tsx: "use client" page that hosts BOTH forms
+    and toggles between them IN PLACE (no navigation). useState<Mode> ("login" |
+    "signup"); the page owns ONLY the toggle + post-success redirect — each form
+    still owns its own input state/validation/error display (SignUpForm/LoginForm
+    already built). Renders LoginForm or SignUpForm conditionally; switching mode
+    remounts the other form so its state (incl. password) resets — desirable.
+  - REDIRECT: forms call onSuccess -> handleSuccess does router.push("/dashboard")
+    + router.refresh() (next/navigation). refresh() makes server components re-read
+    the session cookie that better-auth's nextCookies() set during the client auth
+    call. /dashboard is a LATER prd task so it 404s for now — the redirect itself
+    is correct; the 404 is expected until the dashboard page exists.
+  - SCOPE NOTE: did NOT add "redirect away if already authed" (SPEC §11 mentions it
+    for /login,/signup, but it's NOT a prd step here AND /dashboard doesn't exist
+    yet). That belongs to the (app) layout / middleware auth-gate task. Flagging so
+    a future iter doesn't think it's missing.
+  - STYLE: centered card (flex min-h-screen items-center justify-center), max-w-sm
+    column, mode-aware <h1> ("Welcome back" / "Create your account") + subtitle,
+    bottom toggle line ("Don't have an account? Sign up" <-> "Already have an
+    account? Log in") as a real <button>. Uses foreground/background theme tokens
+    (text-foreground/60 opacity modifiers work — colors registered in @theme).
+    Semantic <main>/<header>/<h1>, dark-mode aware.
+  - VERIFIED with Playwright MCP against the LIVE dev server (:3000): (1) /authenticate
+    renders in LOGIN mode (Welcome back + Email/Password/Log in); (2) clicking the
+    "Sign up" toggle swaps to SIGNUP mode (Create your account + Name/Email/Password/
+    Sign up + "Already have an account? Log in"); (3) filling a fresh unique email +
+    submitting -> real better-auth signup succeeds -> onSuccess fires -> URL changes
+    to /dashboard. The ONLY console errors are the expected /dashboard 404s (page is
+    a later task), NOT a code bug. `bun run build` PASS (/authenticate registered as
+    a static ○ route, 4 routes total), `bun run lint` PASS (clean).
+  - NOTE: signup wrote a user row to dev DB data/app.sqlite (gitignored) via a
+    throwaway unique email (ralph-authpage-0628@example.com). Harmless.
+  - NEXT: Header (server component, getSession()) + LogoutButton ("use client",
+    signOut) -> then the ACTIONS layer (lib/actions/notes.ts "use server") which
+    unblocks the dashboard/editor/share UI.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
