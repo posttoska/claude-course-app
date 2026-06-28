@@ -49,14 +49,45 @@ DONE
     task "Create SQLite database with better-auth schema" is now trivially
     satisfiable — just verify the 4 tables exist and mark it passes=true.
 
+[database] Create notes table with indexes  — passes=true
+  - Added applyNotesSchema() to lib/db.ts, called from openDatabase() right after
+    the pragmas, so the `notes` table + indexes are created idempotently on cold
+    start (CREATE TABLE/INDEX IF NOT EXISTS). This is per CLAUDE.md's decision
+    ("notes schema lives in lib/db.ts"); supersedes the earlier "db.ts creates no
+    tables" stance from the lib/db.ts iteration.
+  - Schema (SPEC §5.2 shape, prd column names): id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE, title TEXT,
+    content_json TEXT NOT NULL, is_public INTEGER NOT NULL DEFAULT 0,
+    public_slug TEXT UNIQUE, created_at/updated_at TEXT NOT NULL.
+    Indexes: idx_notes_user_id, idx_notes_is_public; public_slug is indexed by
+    its UNIQUE autoindex (the share-link lookup path) — no separate named index.
+  - NAMING DECISION: used prd's content_json / public_slug (not SPEC §5.2's
+    content / public_id). The prd defines `passes` and is internally consistent
+    across the data-layer tasks (Note type uses camelCase contentJson/publicSlug,
+    and there's a getNoteByPublicSlug task). TS Note type (next task) will map
+    snake_case rows -> camelCase. Flagging so a future iter doesn't "fix" this.
+  - FORWARD-FK / ORDERING (corrects the note below about user existing first):
+    by design getDb() (-> openDatabase -> applyNotesSchema) runs BEFORE auth's
+    migrations create `user` (lib/auth.ts calls getDb() then runs migrations).
+    SQLite resolves REFERENCES at write time, not DDL time, so creating `notes`
+    with a forward FK to a not-yet-existing `user` is fine; the FK becomes
+    enforceable once auth creates `user`. Verified end-to-end under bun:sqlite
+    AND node:sqlite with the real better-auth migration path.
+  - VERIFIED: 17-check throwaway bun script (all 8 cols + types/NOT NULL,
+    is_public DEFAULT 0, FK enforced on insert, ON DELETE CASCADE, UNIQUE rejects
+    dup public_slug + allows many NULLs, all 3 index targets present, id NOT NULL
+    rejects NULL). Adversarial 3-lens review (compliance/robustness/invariants)
+    all voted "ship", nits only. `bun run build` PASS, `bun run lint` PASS.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
   bun run build     : PASS
   bun run lint      : PASS
-  bun run test      : N/A yet — vitest not configured, 0 test files (prd task
-                      "Set up Vitest configuration" is still pending).
-  bun run test:e2e  : N/A yet — no script; Playwright not installed (prd task
+  bun run test      : FAIL (expected) — `vitest run` exits 1 with "No test files
+                      found"; no tests authored yet. Pre-existing, not a
+                      regression (prd task "Set up Vitest configuration" pending).
+  bun run test:e2e  : N/A — no test:e2e script; Playwright not installed (prd task
                       "Set up Playwright for E2E testing" is still pending).
 
 --------------------------------------------------------------------------------
@@ -65,13 +96,19 @@ NEXT / NOTES FOR FUTURE ITERATIONS
   - Suggested next (in rough dependency order):
       1. "Create SQLite database with better-auth schema" — already DONE by
          lib/auth.ts migrations; just verify the 4 tables + mark passes=true.
-      2. "Create better-auth API route" — app/api/auth/[...all]/route.ts:
+      2. "Define Note type and create helper functions (lib/notes.ts)" — map
+         snake_case rows -> camelCase Note (contentJson/publicSlug/isPublic),
+         generatePublicSlug() (nanoid 16+; nanoid is NOT yet a dep — `bun add`
+         it or use crypto.randomUUID()/getRandomValues), default empty TipTap
+         JSON const { type:"doc", content:[{ type:"paragraph" }] }. The notes
+         table now exists (this iteration).
+      3. "Create better-auth API route" — app/api/auth/[...all]/route.ts:
          `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
-      3. "Implement server-side auth helpers" — getSession()/requireAuth() wrapping
+      4. "Implement server-side auth helpers" — getSession()/requireAuth() wrapping
          auth.api.getSession({ headers: await headers() }).
-      4. "Create auth client for frontend" — lib/auth-client.ts (createAuthClient).
-      5. "Create notes table with indexes" — SPEC §5.2; the FK references user(id),
-         which now exists, so inserts will pass FK checks.
+      5. "Create auth client for frontend" — lib/auth-client.ts (createAuthClient).
+      6. Then the repository fns (createNote/getNoteById/getNotesByUser/updateNote/
+         deleteNote/setNotePublic/getNoteByPublicSlug) on top of lib/notes.ts.
   - lib/db.ts deliberately does NOT create any tables; auth tables come from
     better-auth migrations (now wired in lib/auth.ts on cold start).
   - When wiring the notes table, follow SPEC §5 (notes columns) and reuse

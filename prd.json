@@ -22,7 +22,7 @@
       "Create indexes on user_id, public_slug, is_public",
       "Verify table structure and indexes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",

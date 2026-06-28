@@ -1,4 +1,5 @@
-// Single shared SQLite handle plus small, typed query helpers.
+// Single shared SQLite handle plus small, typed query helpers, and the owner of
+// the app's `notes` schema (created idempotently on cold start — see CLAUDE.md).
 //
 // Runtime: the app runs under Bun (dev/build/start use `--bun`), where the data
 // layer uses `bun:sqlite`. Under plain Node — e.g. the Vitest test runner — it
@@ -57,7 +58,38 @@ function openDatabase(): RawDatabase {
 
   instance.exec("PRAGMA journal_mode = WAL;"); // better read concurrency
   instance.exec("PRAGMA foreign_keys = ON;"); // enforce ON DELETE CASCADE
+  applyNotesSchema(instance);
   return instance;
+}
+
+/**
+ * Create the app-owned `notes` table + indexes (idempotent — SPEC §5.2).
+ *
+ * `user_id` is a forward foreign-key reference to better-auth's `user` table,
+ * which its own migrations create on cold start (lib/auth.ts). SQLite permits
+ * the reference before the parent table exists and enforces it only at write
+ * time (verified). Content is TipTap/ProseMirror JSON, never raw HTML;
+ * booleans are 0/1; `public_slug` is the high-entropy share token — NULL until
+ * a note is first shared (UNIQUE allows many NULLs) and the column the public
+ * share-link lookup queries.
+ */
+function applyNotesSchema(instance: RawDatabase): void {
+  instance.exec(`
+    CREATE TABLE IF NOT EXISTS notes (
+      id           TEXT    PRIMARY KEY NOT NULL,
+      user_id      TEXT    NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      title        TEXT,
+      content_json TEXT    NOT NULL,
+      is_public    INTEGER NOT NULL DEFAULT 0,
+      public_slug  TEXT    UNIQUE,
+      created_at   TEXT    NOT NULL,
+      updated_at   TEXT    NOT NULL
+    );
+  `);
+  // `public_slug` is already indexed by its UNIQUE constraint (the lookup path
+  // for shared notes), so only these two need explicit indexes.
+  instance.exec("CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);");
+  instance.exec("CREATE INDEX IF NOT EXISTS idx_notes_is_public ON notes(is_public);");
 }
 
 /** Lazily opens (once) and returns the shared SQLite handle — a singleton. */
