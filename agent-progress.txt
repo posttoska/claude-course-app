@@ -1285,11 +1285,10 @@ CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
   bun run build     : PASS
   bun run lint      : PASS
-  bun run test      : FAIL (expected) — vitest IS now installed (test script =
-                      `vitest run`, + jsdom/testing-library in devDeps), but no
-                      *.test/*.spec files exist yet so it exits 1 "No test files
-                      found". Pre-existing, not a regression (prd tasks "Write
-                      unit tests for ..." still pending — they author the files).
+  bun run test      : PASS — vitest.config.ts now exists (jsdom env, "@/" alias,
+                      __tests__ include pattern). __tests__/setup.test.ts (2 tests)
+                      passes. The db/notes/actions unit-test suites are still pending
+                      prd tasks; they add files alongside setup.test.ts.
   bun run test:e2e  : N/A — no test:e2e script defined; Playwright not installed
                       (prd task "Set up Playwright for E2E testing" still pending).
 
@@ -1465,3 +1464,57 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     config -> unit tests (db/notes/actions) -> Playwright setup -> e2e specs (auth/notes/
     sharing/responsive). The data + actions + repo layers already have throwaway-smoke
     coverage that the Vitest tasks can formalize.
+
+[testing] Set up Vitest configuration — passes=true   (FIRST testing task; opens the
+  TESTING category. Chose this risky/foundation task over the routine presentational
+  UI tasks per the loop rule "foundation/risky before routine" — it unblocks all 3
+  unit-test tasks (db/notes/actions).)
+  - Created vitest.config.ts (the only deliverable; vitest@4.1.9 + jsdom@29 +
+    @testing-library/react + @vitejs/plugin-react were ALREADY in devDeps from a
+    prior setup, and package.json already had test scripts: test=`vitest run`,
+    test:watch=`vitest`). Config: plugins:[react()] (JSX/React 19 transform);
+    test.environment:"jsdom" (prd step 1 — enables the later component tests; the
+    Node builtins the data layer needs still load fine under jsdom, see below);
+    test.include:["__tests__/**/*.{test,spec}.{ts,tsx}"] (prd step 3 — where the
+    db/notes/actions suites will live; node_modules excluded by Vitest's default
+    exclude, which matters since zod/tsconfig-paths ship their own *.test.ts);
+    resolve.alias "@" -> project root via dirname(fileURLToPath(import.meta.url))
+    (prd step 2 — mirrors tsconfig's "@/*", so tests import `@/lib/...` like the app).
+  - RUNTIME NOTE (the real "risky integration" this de-risks for the next tasks):
+    Vitest runs under NODE, not Bun. lib/db.ts is driver-agnostic and falls back to
+    node:sqlite (process.getBuiltinModule) under Node — Node here is v24.17.0, which
+    has node:sqlite (needs >=22.5) — so the repository/action suites will be testable
+    without a Bun process. jsdom doesn't touch `process`/Node builtins, so node:sqlite
+    still loads under the jsdom environment. (This task's own test doesn't hit the DB.)
+  - GLOBALS DECISION: did NOT set test.globals:true. Test files import { describe, it,
+    expect } from "vitest" explicitly. WHY: tsconfig.json includes **/*.ts, so
+    `next build` typechecks the __tests__ files too — bare globals would need
+    vitest/globals wired into the TS types (extra tsconfig surgery); explicit imports
+    keep test files valid TS under the Next build with zero tsconfig changes. Confirmed:
+    `bun run build` typechecked __tests__/setup.test.ts cleanly. Flagging so a future
+    iter doesn't switch to globals without also fixing the build typecheck.
+  - VERIFY (prd step 4 "verify runs correctly"): added __tests__/setup.test.ts — a
+    minimal sanity suite proving the config actually works: (1) jsdom env active
+    (typeof window/document === "object"), (2) the "@/" alias resolves a real module
+    (imports @/lib/validation's TitleSchema, asserts it trims). NOTE: ran via
+    `bun run test` (= `vitest run`), NOT bare `bun test` (Bun's own runner would
+    conflict with Vitest); the prd's "bun test" wording means the npm script. With no
+    test files `vitest run` exits 1 ("No test files found"), so this sanity suite is
+    what makes the verification real — and it's a legit permanent part of the test
+    setup. The later db/notes/actions suites add their own files alongside it.
+  - CHECKS: `bun run test` PASS (1 file, 2 tests, ~1.6s) — FIRST passing run, flips the
+    long-standing "No test files found" exit-1 state. `bun run build` PASS (7 routes,
+    all ƒ Dynamic; typechecks the new test file), `bun run lint` PASS (clean, exit 0).
+    `bun run test:e2e` still N/A (no script; "Set up Playwright for E2E testing" is a
+    later pending task). No UI/app change in this task -> Playwright MCP N/A.
+  - NEXT (testing, in dependency order): the 3 unit-test tasks now unblocked —
+    __tests__/lib/db.test.ts (getDb singleton + query/get/run; use DATABASE_PATH=
+    :memory: + a stub `user` table for FKs, same as the prior throwaway smokes),
+    __tests__/lib/notes.test.ts (createNote defaults / getNoteById authz / updateNote
+    timestamp / deleteNote authz / setNotePublic slug), __tests__/actions/notes.test.ts
+    (mock the auth session, then create/update/delete/toggleShare). All run under Node/
+    node:sqlite — do NOT try to drive better-auth flows from Vitest (it's bun:sqlite-
+    backed under the app runtime; verify auth via Bun smoke or Playwright e2e instead).
+    Then "Set up Playwright for E2E testing" (install @playwright/test + browsers, add a
+    test:e2e script + playwright.config.ts with a webServer) and the e2e specs. The
+    presentational UI tasks (landing/styling/responsive) remain too.

@@ -496,7 +496,7 @@
       "Set test file patterns",
       "Verify 'bun test' runs correctly"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",
