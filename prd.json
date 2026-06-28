@@ -521,7 +521,7 @@
       "Test deleteNote() authorization",
       "Test setNotePublic() generates/clears slug"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",

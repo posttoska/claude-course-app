@@ -1280,15 +1280,59 @@ DONE
     reuse lib/tiptap `extensions`). Then landing/styling/responsive, then the Vitest
     + Playwright test-setup tasks.
 
+[testing] Write unit tests for notes repository — passes=true
+  - Created __tests__/lib/notes.test.ts: full unit coverage of the lib/notes
+    repository surface, running under Vitest on the node:sqlite fallback (same
+    proven path as the existing db.test.ts — Vitest runs on Node, not Bun). 12
+    tests, all green; whole suite now 3 files / 23 tests pass.
+  - SETUP MIRRORS db.test.ts: process.env.DATABASE_PATH=":memory:" set BEFORE the
+    first getDb() (lazy open reads it once). beforeEach closeDb() for a clean slate,
+    then seedUsers() creates a minimal stub `"user"` table (just the id PK the
+    notes FK targets) + alice/bob rows — the bare in-memory DB has no better-auth
+    `user` table, and PRAGMA foreign_keys=ON means inserts need the FK target to
+    exist. notes table itself is auto-created by getDb()->applyNotesSchema.
+  - COVERS every prd step + the authorization invariants (SPEC §8/§14.2):
+    * createNote(): defaults (title "Untitled note", empty TipTap doc, is_public
+      0/null slug, created_at===updated_at), row persisted with content as a JSON
+      *string* (SPEC §5.3), honors provided title/content, unique UUID per note.
+    * getNoteById(): owner fetch works; non-owner + missing id BOTH -> null
+      (404-not-403, existence not revealed). getNotesByUser(): per-user scoping +
+      updated_at DESC order (forced timestamps so the ms-tie can't flake).
+    * updateNote(): partial patch + ALWAYS bumps updated_at (asserted against a
+      forced known-old baseline so the bump is deterministic, no ms tie); untouched
+      field preserved; non-owner -> null + note unchanged.
+    * deleteNote(): non-owner -> false + note intact; owner -> true + gone;
+      re-delete -> false (idempotent).
+    * setNotePublic()/getNoteByPublicSlug(): enable mints a 21-char slug + public
+      lookup works; disable KEEPS the slug (SPEC §10.2 — NOT cleared as the prd
+      step loosely words it; test comments flag this so a future iter doesn't
+      "fix" it) but lookup 404s via the is_public=1 gate; re-enable reuses the same
+      slug; non-owner -> null; unknown slug -> null.
+  - DETERMINISM: anywhere a timestamp comparison mattered (list order, update
+    bump) the test forces explicit updated_at values via raw SQL rather than
+    relying on wall-clock ms gaps (createNote uses ms-resolution ISO strings that
+    can tie within a test) — so the suite is flake-free.
+  - No `any` (typed StoredNote for the raw-row asserts), no unused imports.
+  - VERIFIED: `bun run test` PASS (3 files / 23 tests), `bun run lint` PASS (clean),
+    `bun run build` PASS (7 routes — graph unchanged; tests aren't bundled). No UI
+    in this task -> Playwright N/A. `bun run test:e2e` still N/A (no script; the
+    "Set up Playwright" prd task is still pending).
+  - NEXT (testing): "Write unit tests for server actions" (mock auth session +
+    revalidatePath / next-cache; lib/actions/notes.ts) then "Set up Playwright for
+    E2E testing" (the risky integration: @playwright/test + browser install +
+    webServer config) which unblocks the 4 E2E spec tasks. Also still open: 3
+    styling/responsive UI tasks.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
   bun run build     : PASS
   bun run lint      : PASS
-  bun run test      : PASS — vitest.config.ts now exists (jsdom env, "@/" alias,
-                      __tests__ include pattern). __tests__/setup.test.ts (2 tests)
-                      passes. The db/notes/actions unit-test suites are still pending
-                      prd tasks; they add files alongside setup.test.ts.
+  bun run test      : PASS — 3 files / 23 tests. __tests__/setup.test.ts (2,
+                      jsdom + "@/" alias), __tests__/lib/db.test.ts (9, generic
+                      helpers), __tests__/lib/notes.test.ts (12, repository surface
+                      + authz). The actions unit-test suite is still a pending prd
+                      task; it adds __tests__/actions/notes.test.ts alongside these.
   bun run test:e2e  : N/A — no test:e2e script defined; Playwright not installed
                       (prd task "Set up Playwright for E2E testing" still pending).
 
