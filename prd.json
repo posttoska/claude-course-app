@@ -438,7 +438,7 @@
       "No auth check needed (public route)",
       "Pass note to viewer component"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",
@@ -450,7 +450,7 @@
       "Style for reading (typography, spacing)",
       "No editing controls visible"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

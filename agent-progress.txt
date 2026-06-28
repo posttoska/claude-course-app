@@ -1399,3 +1399,69 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     lib/tiptap extensions. @tiptap/static-renderer is NOT in package.json yet -> bun add
     it. This is the riskiest remaining integration (new dep + the shared-config render
     contract); do it next. Then landing/styling/responsive, then the test setup tasks.
+
+[ui] Build public note page with RSC + Create public note viewer component — passes=true (x2)
+  (Did ONE focused increment — the public read path — that completes BOTH tightly-
+  coupled tasks: the page's whole job is to fetch + render via the viewer, and the
+  viewer's whole job is to render the note's JSON. Both verified end-to-end via
+  Playwright, so both flipped to passes=true (ShareToggle precedent). This is the
+  riskiest remaining integration: a NEW dep + the shared-config server-render contract.)
+  - NEW DEP: `bun add @tiptap/static-renderer@^3.27.1` -> resolved 3.27.1 (matches the
+    @tiptap/core 3.27.1 override + react/starter-kit ^3.27.1). The page bundles it +
+    pulls lib/notes->lib/db into a PAGE bundle (getBuiltinModule driver — builds clean;
+    don't revert to a dynamic require). Confirmed the export subpath via the installed
+    package.json exports + context7: `import { renderToReactElement } from
+    "@tiptap/static-renderer/pm/react"`, signature renderToReactElement({ content,
+    extensions }) -> ReactElement (matches SPEC §10.3 exactly).
+  - components/PublicNoteViewer.tsx: SERVER COMPONENT (no "use client"). Renders the
+    stored TipTap JSON to React server-side via renderToReactElement with the SHARED
+    `extensions` from lib/tiptap (CLAUDE.md invariant — same config as the editor so
+    node/mark mappings line up). Output is React-ESCAPED (no dangerouslySetInnerHTML),
+    the core XSS defence (SPEC §14.1). Props { title, contentJson } ONLY — the internal
+    note id is never passed to / rendered on the public route (SPEC §10.1/§14.5). Title
+    as <h1> (falls back "Untitled note"); body in <div class="prose dark:prose-invert
+    max-w-none"> for reading typography. NO editor / NO toolbar / NO editing controls.
+  - PRD-vs-SPEC RESOLVED: the prd step says "render with editable:false" (which would
+    mean a CLIENT @tiptap/react editor). Followed the AUTHORITATIVE CLAUDE.md invariant
+    + SPEC §10.3 instead — server-side STATIC render, no editor, no DOM. Documented in
+    the component header so a future iter doesn't "fix" it back to a client editor.
+  - app/p/[slug]/page.tsx: async Server Component, NO auth (the only note route without
+    it). params: Promise<{ slug }> (Next 16 async). getNoteByPublicSlug(slug) — gated
+    SOLELY on is_public=1 (CLAUDE.md invariant), looked up by the share TOKEN never the
+    id -> null when missing/private -> notFound() (404 not 403, never reveals existence).
+    Renders <PublicNoteViewer title contentJson/>. Reads happen directly in the RSC
+    (SPEC §3.1 — no REST API).
+  - VERIFIED with Playwright MCP against the live dev server (:3000). Seeded a PUBLIC
+    note via a throwaway bun script (_seed-public.ts, REMOVED after) with rich content
+    covering EVERY whitelisted node/mark (h1, h2, bold/italic/inline-code, bulletList x2,
+    codeBlock, horizontalRule + a literal "<script>alert(1)</script>" string), wrote to
+    the gitignored dev DB. Checks:
+      (1) RENDER — /p/<slug> accessibility snapshot showed title h1 "Shared public note"
+          + the full doc: heading[1], heading[2], paragraph with strong/emphasis/code,
+          list+2 listitems, code block "const answer = 42;", separator (hr), final
+          paragraph. The "<script>alert(1)</script>" rendered as LITERAL TEXT, not a
+          DOM <script> — proves React-escaping. NO editor/toolbar (read-only). 0 console
+          errors on the page.
+      (2) ANONYMOUS (no-auth) — fetch with credentials:'omit' -> 200 + HTML contains
+          "Public note heading" -> the public route needs NO session. Also confirmed the
+          raw HTML has "&lt;script&gt;" and NOT "<script>alert(1)" (XSS-safe on the wire).
+      (3) BAD SLUG — fetch /p/this-slug-does-not-exist -> 404.
+      (4) PRIVATE-BUT-SLUGGED (the is_public=1 gate, security-critical) — toggled the
+          seeded note private (slug RETAINED per SPEC §10.2) via _unshare-check.ts
+          (REMOVED), then fetched its slug -> 404 + HTML does NOT contain the content.
+          Confirms an unshared note 404s even though its slug still exists.
+    Both throwaway scripts + the screenshot removed after.
+  - CHECKS: `bun run build` PASS (7 routes; /p/[slug] now ƒ Dynamic — correct, it reads
+    the DB per request), `bun run lint` PASS (clean, exit 0). `bun run test` still exits
+    1 "No test files found" (pre-existing, NOT a regression — the "Write unit tests" prd
+    tasks author the files; testing category not started). `bun run test:e2e` still N/A
+    (no script; "Set up Playwright" prd task pending).
+  - NOTE: the seed wrote a note row to the gitignored dev DB data/app.sqlite (left
+    PRIVATE after the unshare check; its slug is retained per SPEC §10.2). Harmless.
+  - NEXT: the SHARING feature is now end-to-end (toggle -> public URL -> public read
+    page). Remaining UI is presentational: "Style the landing page" (app/page.tsx is
+    still the default Next skeleton), "Apply consistent styling and dark mode",
+    "Implement responsive design". Then the TESTING category (all passes=false): Vitest
+    config -> unit tests (db/notes/actions) -> Playwright setup -> e2e specs (auth/notes/
+    sharing/responsive). The data + actions + repo layers already have throwaway-smoke
+    coverage that the Vitest tasks can formalize.
