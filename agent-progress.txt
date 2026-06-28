@@ -1518,3 +1518,45 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     Then "Set up Playwright for E2E testing" (install @playwright/test + browsers, add a
     test:e2e script + playwright.config.ts with a webServer) and the e2e specs. The
     presentational UI tasks (landing/styling/responsive) remain too.
+
+[testing] Write unit tests for database utilities — passes=true
+  - Created __tests__/lib/db.test.ts: 10 tests over lib/db.ts's generic helpers,
+    the first of the 3 unit-test suites the Vitest config unblocked. Formalizes the
+    throwaway "dual-runtime smoke" the lib/db.ts iter ran. Runs under Node (Vitest)
+    via the node:sqlite fallback (Node v24.17.0 has node:sqlite; $name binds work —
+    verified directly). Chose this foundation test over the risky Playwright setup /
+    routine presentational UI per the loop rule + prd dependency order.
+  - ISOLATION: top-of-file `process.env.DATABASE_PATH = ":memory:"` (set before the
+    first lazy getDb(), so no file is written). beforeEach closeDb() + recreate a
+    throwaway `items` table — a :memory: DB lives only as long as its connection, so
+    closeDb() gives each test a clean slate AND clears the prepared-stmt cache (no
+    statement bound to a closed handle leaks). afterAll closeDb(). Used a dedicated
+    `items` table (not `notes`) so the suite doesn't need the better-auth `user`
+    table that notes' FK targets.
+  - COVERAGE (prd steps): getDb() singleton (getDb()===getDb(); fresh instance after
+    closeDb()); run() INSERT (changes=1 + numeric lastInsertRowid>0) / UPDATE (multi-
+    row change count) / DELETE (change count + row gone); query<T>() (all rows typed,
+    $name bind filters, [] when no match); get<T>() (single row, null when no match —
+    confirms lib/db's `row ?? null` normalization of node:sqlite's undefined).
+  - GOTCHA FIXED (flagging so a future iter doesn't reintroduce): comparing the two
+    native DB handles via `expect(second).not.toBe(first)` THREW "database is not
+    open". Vitest's toBe runs a deep-equality "did you mean toEqual?" hint that
+    traverses the operands; traversing the now-CLOSED `first` handle throws. Fix:
+    reduce identity to a plain boolean first — `expect(Object.is(first, second))
+    .toBe(false)` — so the matcher never deep-traverses a closed native handle.
+    Don't switch it back to `.toBe(handle)` on a closed handle.
+  - CHECKS: `bun run test` PASS (2 files, 12 tests — setup.test.ts 2 + db.test.ts 10,
+    ~1.3s). `bun run build` PASS (7 routes; tsconfig includes **/*.ts so the new test
+    file is typechecked by the Next build — clean). `bun run lint` PASS (clean, exit
+    0). `bun run test:e2e` still N/A (no script; "Set up Playwright" prd task pending).
+    No UI/app change -> Playwright MCP N/A.
+  - NEXT (testing, in dependency order): __tests__/lib/notes.test.ts (createNote
+    defaults / getNoteById authz / updateNote timestamp bump / deleteNote authz /
+    setNotePublic slug mint+clear-gate — needs a stub `user` table + row for the FK,
+    same :memory: pattern as here) -> __tests__/actions/notes.test.ts (mock the auth
+    getSession, then create/update/delete/toggleShare). All under Node/node:sqlite —
+    do NOT drive better-auth flows from Vitest (bun:sqlite-backed under the app
+    runtime; use a Bun smoke or Playwright e2e for auth). Then "Set up Playwright for
+    E2E testing" (install @playwright/test + browsers, add a test:e2e script +
+    playwright.config.ts webServer) and the e2e specs. Presentational UI tasks
+    (landing/styling/responsive) also remain.

@@ -508,7 +508,7 @@
       "Test get<T>() returns single row",
       "Test run() executes mutations"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",
