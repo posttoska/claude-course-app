@@ -321,7 +321,7 @@
       "Return 404 if not found or not owned",
       "Pass note data to editor component"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

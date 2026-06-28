@@ -834,6 +834,61 @@ DONE
     public viewer (@tiptap/static-renderer + @tailwindcss/typography both installed),
     landing/styling/responsive, then Vitest/Playwright test-setup tasks.
 
+[ui] Build note editor page with RSC — passes=true
+  (FIRST /notes/[id] editor-cluster task; makes the route REAL — it was a 404 that
+  CreateNoteButton already navigates to. Chose the RSC SHELL first: it's the
+  foundation/dependency root the whole editor cluster hangs off, and the riskier
+  TipTap client integration is the NEXT task. Same page-first flow the dashboard
+  used before <NoteList> was extracted.)
+  - Created app/notes/[id]/page.tsx: async Server Component shell (SPEC §3.1/§11 —
+    Server Component shell + client editor). Next 16 async params: `params:
+    Promise<{ id: string }>`, awaited. GUARD ORDER (SPEC §7.5/§8/§14.2):
+    requireAuth() (authoritative server-side session; redirects to /authenticate
+    when signed out, `never` return narrows session non-null) -> getNoteById(
+    session.user.id, id) (ownership baked into its WHERE — missing vs not-owned are
+    indistinguishable, both null) -> notFound() on null = 404 NOT 403, so existence
+    is never revealed.
+  - RENDER: minimal read-only shell around the fetched note — "← Back to dashboard"
+    link, title (falls back to "Untitled note"), "Updated <date>" (formatUpdatedAt,
+    same stable en-GB label as NoteList — RSC-safe, output serialized), Public/
+    Private badge (same styling tokens as NoteList), and a dashed "Editor coming
+    soon" mount-point region.
+  - SCOPE/prd-wording NOTE: prd step "Pass note data to editor component" — the
+    TipTap editor (components/NoteEditor.tsx) is the NEXT prd task (passes=false),
+    so this iter renders the shell inline and marks where the editor mounts; the
+    NoteEditor task replaces that region and receives `note` (incl. note.contentJson)
+    as initial data. Page-first-then-replace, exactly like dashboard->NoteList.
+    Flagging so a future iter doesn't think the page is unfinished. DEPS already
+    installed: @tiptap/react + @tiptap/pm + @tiptap/starter-kit + @tailwindcss/
+    typography are all in package.json — the editor task needs no new installs,
+    only lib/tiptap.ts (shared extension config, SINGLE SOURCE editor+renderer).
+  - PARTIALLY SATISFIES later editor sub-steps already (don't redo): "Add 'Back to
+    Dashboard' link" + "Handle 404 errors gracefully" land here as a side effect of
+    the shell, though those belong to the "navigation and error handling" task.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), existing
+    session (3 seeded notes): (1) OWNED note — clicked "Project ideas" on /dashboard
+    -> /notes/<uuid> rendered the shell: title "Project ideas", "Updated 28 Jun
+    2026", Public badge, back link, editor mount point; (2) 404 — navigated to
+    /notes/00000000-0000-0000-0000-000000000000 (non-existent ~ also the not-owned
+    case) -> page title "404: This page could not be found.", the ONLY console error
+    is the expected 404 resource response (confirmed via console_messages), not a
+    code bug; (3) auth gate is the SAME requireAuth() already verified on /dashboard
+    (redirects logged-out -> /authenticate). `bun run build` PASS — /notes/[id] now
+    registered as ƒ (Dynamic), 6 routes total; pulling lib/notes->lib/db into the
+    page bundle built clean (getBuiltinModule driver — don't revert to a dynamic
+    require). `bun run lint` PASS (clean).
+  - NEXT (editor cluster, in dependency order): lib/tiptap.ts (shared `extensions`
+    — disable non-whitelisted StarterKit nodes per SPEC §9.1, SINGLE SOURCE for
+    editor + static renderer) -> components/NoteEditor.tsx ("use client",
+    @tiptap/react useEditor/EditorContent, immediatelyRender:false, initial content
+    = note.contentJson, onUpdate callback) -> wire it into this page (replace the
+    placeholder) -> title input -> EditorToolbar (bold/italic/H1-3/paragraph) ->
+    code+list buttons -> save (updateNoteAction, debounced auto-save) -> delete
+    (confirm + deleteNoteAction -> /dashboard) -> nav/error/toasts + loading.tsx ->
+    ShareToggle (toggleShareAction) + copy URL. Then /p/[slug] public viewer
+    (@tiptap/static-renderer + @tailwindcss/typography installed), landing/styling/
+    responsive, then Vitest/Playwright test-setup tasks.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
