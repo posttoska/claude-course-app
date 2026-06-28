@@ -14,6 +14,7 @@ import {
   createNote,
   deleteNote,
   getNoteById,
+  setNotePublic,
   updateNote,
   type CreateNoteInput,
   type Note,
@@ -134,4 +135,50 @@ export async function deleteNoteAction(noteId: string): Promise<ActionResult<{ i
   revalidatePath("/dashboard");
   revalidatePath(`/notes/${noteId}`);
   return { ok: true, data: { id: noteId } };
+}
+
+/**
+ * Toggle a note's public sharing and return the updated note, including its
+ * `publicSlug` (SPEC §10.2 share/unshare flows, §12).
+ *
+ * Guard order: session -> validate the flag -> ownership+SQL (atomic) ->
+ * revalidate. Like `deleteNoteAction`, `setNotePublic` enforces ownership in its
+ * own owner-scoped read/write and returns null for a missing or someone-else's
+ * note, so the ownership check and the toggle are a single atomic step (no TOCTOU
+ * window — there's nothing to validate between a separate check and the write).
+ * A non-owned/missing note yields "Note not found.", never revealing whether the
+ * id exists (SPEC §8, §14.2, 404-not-403). On enable a `public_slug` is minted
+ * (reused on re-share); on disable the slug is kept but `is_public` flips to 0 so
+ * old links 404 (SPEC §10.2). An unauthenticated caller gets an error result
+ * instead of a thrown redirect, consistent with the other actions.
+ *
+ * Revalidates the dashboard (share status in the list), the note page (its share
+ * controls), and — when a slug exists — the public page so its cache reflects the
+ * new visibility (newly shared note appears; unshared note 404s).
+ */
+export async function toggleShareAction(
+  noteId: string,
+  isPublic: boolean,
+): Promise<ActionResult<Note>> {
+  const session = await getSession();
+  if (!session) {
+    return { ok: false, error: "You must be signed in to share a note." };
+  }
+
+  // The flag crosses the client boundary, so don't trust its runtime type.
+  if (typeof isPublic !== "boolean") {
+    return { ok: false, error: "Invalid share state." };
+  }
+
+  const note = setNotePublic(session.user.id, noteId, isPublic);
+  if (!note) {
+    return { ok: false, error: "Note not found." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/notes/${noteId}`);
+  if (note.publicSlug) {
+    revalidatePath(`/p/${note.publicSlug}`);
+  }
+  return { ok: true, data: note };
 }

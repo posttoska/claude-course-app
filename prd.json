@@ -262,7 +262,7 @@
       "Return updated note with publicSlug",
       "Revalidate note page"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

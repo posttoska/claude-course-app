@@ -543,6 +543,55 @@ DONE
     setNotePublic + revalidate note page; returns updated note with publicSlug.
     Then dashboard/editor/share UI consume create/update/delete/share.
 
+[actions] Create server action for toggling note sharing — passes=true
+  (COMPLETES the actions category — all 4 action tasks now passes=true.)
+  - Added toggleShareAction(noteId, isPublic) to lib/actions/notes.ts and
+    `setNotePublic` to the existing import from @/lib/notes. Reuses the
+    ActionResult<T> shape from the create/update/delete actions.
+  - Signature: toggleShareAction(noteId, isPublic): Promise<ActionResult<Note>>.
+    Returns the updated Note (incl. publicSlug) on success (prd "Return updated
+    note with publicSlug"); an error result otherwise.
+  - GUARD ORDER (CLAUDE.md / SPEC §12): session -> validate flag -> ownership+SQL
+    (ATOMIC) -> revalidate. Like deleteNoteAction, setNotePublic enforces
+    ownership in its own owner-scoped read/write and returns null for a missing
+    OR someone-else's note, so the ownership check and the toggle are a SINGLE
+    atomic step (no TOCTOU window — nothing to validate between a separate check
+    and the write). Flagging so a future iter doesn't add a redundant getNoteById
+    ownership check and reintroduce a race.
+  - VALIDATION: the only input besides noteId is the boolean flag, so instead of
+    a Zod schema there's an inline `typeof isPublic !== "boolean"` guard (don't
+    trust the client's runtime type). No note title/content to validate here.
+  - AUTHZ: missing/non-owned note -> setNotePublic null -> "Note not found.",
+    never revealing whether the id exists (SPEC §8/§14.2, 404-not-403).
+  - SHARE SEMANTICS (delegated to setNotePublic, already smoked): enable mints a
+    public_slug only if none exists (re-share reuses the link); disable flips
+    is_public=0 but KEEPS the slug (SPEC §10.2 — old links 404 via the
+    is_public=1 gate, re-share yields the same URL). Confirmed by this iter's
+    smoke (see below).
+  - REVALIDATE: /dashboard (share status in list) + /notes/${noteId} (the share
+    controls) + /p/${publicSlug} when a slug exists (so the public page cache
+    reflects the new visibility — newly shared appears, unshared 404s). prd asks
+    only "Revalidate note page"; added the others for cache correctness,
+    consistent with update/deleteNoteAction.
+  - DECISION: uses getSession() and RETURNS an error result for the
+    unauthenticated case (not requireAuth()'s thrown redirect) — keeps the action
+    serializable/testable. Consistent with the other 3 actions.
+  - VERIFIED: `bun run build` PASS (TS typechecks; graph unchanged at 4 routes —
+    nothing imports the action yet; routes: /, /_not-found, /api/auth/[...all],
+    /authenticate), `bun run lint` PASS (clean). 10-assert throwaway Bun smoke of
+    the setNotePublic path the action wraps (DATABASE_PATH=:memory:, stub `user` +
+    alice/bob): new note private, enable mints 21-char slug + public lookup finds
+    it, disable keeps slug but lookup 404s, re-enable reuses same slug, AUTHZ
+    (bob/missing -> null). 10/10 pass, file removed. The action wiring (getSession/
+    revalidatePath) needs a Next request scope so isn't bare-script testable; full
+    e2e arrives with the ShareToggle UI. No UI in this task -> Playwright N/A.
+  - NEXT: ACTIONS CATEGORY COMPLETE. Frontier is now the CRUD/editor/share UI
+    that consumes these actions: Header + LogoutButton (auth UI), then dashboard
+    (page + NoteList + CreateNoteButton + loading/error), the /notes/[id] editor
+    (TipTap — needs lib/tiptap.ts, @tiptap/react already installed) with save/
+    delete/share, the /p/[slug] public viewer (@tiptap/static-renderer — NOT yet
+    installed), landing/styling/responsive, then Vitest + Playwright test setup.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
