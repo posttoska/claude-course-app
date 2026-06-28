@@ -229,6 +229,36 @@ DONE
     works again, AUTHZ (bob/missing -> null, alice's note untouched). 18/18 pass.
     Smoke file removed. `bun run build` PASS, `bun run lint` PASS (clean).
 
+[auth] Create better-auth API route — passes=true
+  - Created app/api/auth/[...all]/route.ts: the single catch-all that serves
+    EVERY auth endpoint (sign-up/sign-in/sign-out/session/...). Per SPEC §7.2:
+    `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
+    Followed SPEC over the prd's "use auth.handler" wording — toNextJsHandler is
+    the idiomatic App Router wrapper and internally uses auth.handler.
+  - RISKY-INTEGRATION FIX (the real work this iter): adding the route pulled
+    lib/auth.ts -> lib/db.ts into a BUILT route bundle for the first time, which
+    exposed that Turbopack can't handle lib/db.ts's dynamic driver require. It
+    statically rewrote `nodeRequire(specifier)` into a build-time throw stub
+    ("Cannot find module as expression is too dynamic"), failing
+    `next build` at "Collecting page data for /api/auth/[...all]". The
+    `turbopackIgnore` magic comment did NOT help (Turbopack doesn't honor it on a
+    createRequire alias). Earlier `bun run build` PASSes were illusory — nothing
+    imported lib/auth/db into a route until now, so the dynamic require was never
+    bundled.
+  - RESOLUTION: replaced createRequire + dynamic require in lib/db.ts with
+    `process.getBuiltinModule(specifier)`. It's a plain runtime method call (not
+    require/import/require.resolve/new Worker), so Turbopack leaves it untouched.
+    Verified BOTH runtimes load their driver: bun:sqlite under Bun
+    (process.getBuiltinModule('bun:sqlite').Database), node:sqlite under Node 24
+    for Vitest (.DatabaseSync). Removed the now-unused createRequire/node:module
+    import. Driver-agnostic dual-runtime design preserved (CLAUDE.md/SPEC §3.2).
+  - VERIFIED: `bun run build` PASS (/api/auth/[...all] registered as ƒ dynamic),
+    `bun run lint` PASS, dual-runtime db smoke (Bun + Node both load + query).
+    Live endpoint checks vs the dev server: GET /api/auth/ok -> {"ok":true} 200;
+    GET /api/auth/get-session (no cookie) -> null 200; POST /api/auth/sign-up/
+    email -> 200 with a persisted user + token (full integration through the
+    shared getDb() handle, incl. the new getBuiltinModule driver path).
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
@@ -252,13 +282,19 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     start already creates user/session/account/verification (auth migrations) +
     notes (lib/db.ts); just verify the tables exist and flip it. Next phases are
     auth wiring -> actions -> UI -> tests.
+  - AUTH ROUTE DONE this iter (app/api/auth/[...all]/route.ts) — endpoints live
+    and verified. Remember the Turbopack lesson: any NEW route/page that imports
+    lib/db (directly or via lib/auth) must build clean; the getBuiltinModule
+    driver load already handles that, so don't "fix" it back to a dynamic require.
   - Suggested next (in rough dependency order):
-      1. "Create SQLite database with better-auth schema" — verify-only (above).
-      2. Auth wiring (foundation, needed before any auth UI):
-         - "Create better-auth API route" — app/api/auth/[...all]/route.ts:
-           `export const { GET, POST } = toNextJsHandler(auth)` (better-auth/next-js).
+      1. "Create SQLite database with better-auth schema" — verify-only: cold
+         start already creates user/session/account/verification (auth
+         migrations) + notes (lib/db.ts). The POST sign-up smoke this iter proved
+         the auth tables exist + accept writes; just confirm + flip passes=true.
+      2. Remaining auth wiring (foundation, needed before any auth UI):
          - "Implement server-side auth helpers" — getSession()/requireAuth()
-           wrapping auth.api.getSession({ headers: await headers() }).
+           wrapping auth.api.getSession({ headers: await headers() }). NOTE: prd
+           file path is lib (not lib/session.ts from CLAUDE.md) — check prd steps.
          - "Create auth client for frontend" — lib/auth-client.ts (createAuthClient).
   - REPO-FN CONVENTION (set by createNote this iter): createNote is async per prd;
     the read/update/delete/share fns can stay SYNC (driver is sync). All return

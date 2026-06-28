@@ -130,7 +130,7 @@
       "Use auth.handler for both methods",
       "Test auth endpoints respond at /api/auth/*"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "auth",

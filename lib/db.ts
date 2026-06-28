@@ -9,11 +9,9 @@
 //
 // All queries are parameterized ($name binds) — never interpolate user input.
 
-import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-const nodeRequire = createRequire(import.meta.url);
 const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 
 /** Allowed bind value types (SQLite booleans are stored as 0/1 integers). */
@@ -44,10 +42,16 @@ function openDatabase(): RawDatabase {
     mkdirSync(dirname(path), { recursive: true });
   }
 
-  // Variable specifier keeps the bundler from statically resolving the unused
-  // driver; each branch only ever executes under its own runtime.
+  // Load the driver via process.getBuiltinModule, NOT a dynamic require/import:
+  // it's a plain runtime method call, so Next.js/Turbopack never tries to
+  // statically resolve the runtime-only specifier (a dynamic require gets
+  // replaced with a build-time "expression is too dynamic" throw). Each branch
+  // only ever executes under its own runtime: bun:sqlite under Bun
+  // (dev/build/start), node:sqlite under plain Node (Vitest).
   const specifier = isBun ? "bun:sqlite" : "node:sqlite";
-  const sqlite = nodeRequire(specifier) as {
+  const sqlite = (process as unknown as { getBuiltinModule(id: string): unknown }).getBuiltinModule(
+    specifier,
+  ) as {
     Database?: new (path: string, opts?: { create?: boolean }) => RawDatabase;
     DatabaseSync?: new (path: string) => RawDatabase;
   };
