@@ -334,7 +334,7 @@
       "Initialize with note's contentJson",
       "Add onChange callback to track content changes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

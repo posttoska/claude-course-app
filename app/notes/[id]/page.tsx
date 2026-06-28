@@ -10,16 +10,16 @@
 //      so a missing note and a note owned by someone else are indistinguishable.
 //   3. notFound() (404, NOT 403) when null — never reveal whether an id exists.
 //
-// NOTE (page-first flow, mirrors how the dashboard page preceded <NoteList>): the
-// rich TipTap editor (components/NoteEditor.tsx) is the next prd task. Until it
-// exists, this page renders a minimal read-only shell around the fetched note and
-// marks where the editor will mount; the editor task replaces that region and
-// receives `note` as its initial data.
+// NOTE (page-first flow, mirrors how the dashboard page preceded <NoteList>): this
+// Server Component shell mounts the interactive client editor (NoteEditor) and
+// passes it the fetched `note` as initial data. The title input, toolbar, and
+// save/delete/share controls are later prd tasks that extend NoteEditor itself.
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { getNoteById } from "@/lib/notes";
+import { NoteEditor } from "@/components/NoteEditor";
 
 /** Stable, server-rendered date label (e.g. "28 Jun 2026"). Matches NoteList. */
 function formatUpdatedAt(iso: string): string {
@@ -66,14 +66,7 @@ export default async function NoteEditorPage({ params }: { params: Promise<{ id:
         </div>
       </header>
 
-      {/* Editor mount point. The interactive TipTap editor (next prd task) replaces
-          this region and receives `note` (incl. note.contentJson) as initial data. */}
-      <section className="rounded-lg border border-dashed border-black/15 px-6 py-16 text-center dark:border-white/20">
-        <p className="text-sm font-medium">Editor coming soon</p>
-        <p className="mt-1 text-sm text-foreground/60">
-          The rich-text editor for this note will load here.
-        </p>
-      </section>
+      <NoteEditor note={note} />
     </main>
   );
 }

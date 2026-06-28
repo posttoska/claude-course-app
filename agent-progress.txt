@@ -889,6 +889,62 @@ DONE
     (@tiptap/static-renderer + @tailwindcss/typography installed), landing/styling/
     responsive, then Vitest/Playwright test-setup tasks.
 
+[ui] Create TipTap editor component — passes=true   (FIRST editor-cluster build;
+  the risky integration that unblocks the whole editor — chosen over the routine
+  title/toolbar/save tasks per the loop rule "risky integrations before routine".)
+  - Created lib/tiptap.ts: the SINGLE SOURCE OF TRUTH `extensions` array (CLAUDE.md
+    invariant / SPEC §9.1). One `StarterKit.configure({...})`: heading levels [1,2,3];
+    DISABLED the non-whitelisted nodes/marks (orderedList, blockquote, strike, link,
+    underline) so stored docs can only contain our toolbar whitelist — also the XSS/
+    schema-lockdown measure (SPEC §14.1). KEPT (StarterKit defaults): bold, italic,
+    heading, paragraph, code, codeBlock, bulletList+listItem, horizontalRule + the
+    structural nodes. NO "use client" / no server-only imports — this module must
+    also load inside the server static renderer for /p/[slug] (later task). Used the
+    NAMED export `import { StarterKit }` (the pkg exports named + default + the
+    StarterKitOptions type; v3 added link/underline to the kit, hence disabling them).
+  - Created components/NoteEditor.tsx ("use client"): useEditor + EditorContent from
+    @tiptap/react, `extensions` from lib/tiptap, content = note.contentJson (initial
+    data), immediatelyRender:false (REQUIRED under SSR/Next, SPEC §9.2 — useEditor
+    returns null on first SSR render, guarded with `if (!editor) return null`).
+    editorProps class = "prose dark:prose-invert max-w-none min-h-[60vh]
+    focus:outline-none". onUpdate tracks the latest doc into a useRef (the save task
+    reads it; ref avoids re-render per keystroke) AND calls an optional onChange prop
+    — the prd's "onChange callback to track content changes".
+  - COMPONENT API decision: takes the WHOLE `note: Note` (a plain serializable
+    object — contentJson is parsed JSON), not just initialContent, because the later
+    title/save/delete/share tasks all extend THIS component and need note.id/title/
+    isPublic/publicSlug. The Server page can mount <NoteEditor note={note} /> directly
+    (no onChange needed across the RSC boundary). `import type { Note }` is erased at
+    compile so lib/notes -> lib/db never enters the CLIENT bundle (no Turbopack
+    dynamic-require concern). Flagging so a future iter doesn't switch it to
+    initialContent or add a client wrapper.
+  - Enabled the typography plugin: added `@plugin "@tailwindcss/typography";` to
+    app/globals.css (FIRST use of `prose`; @tailwindcss/typography already installed).
+    Builds clean; the editor element's computed class confirms prose applied.
+  - Wired into app/notes/[id]/page.tsx: replaced the "Editor coming soon" dashed
+    placeholder with <NoteEditor note={note} /> (page-first-then-mount flow). The
+    page's own auth/ownership/404 guard is unchanged.
+  - VERIFIED with Playwright MCP against the live dev server (:3000), already-authed
+    session: opened an existing note (/notes/<uuid>) -> the TipTap editor mounted
+    (div.tiptap.ProseMirror, contenteditable=true) initialised from the note's stored
+    content (its single empty paragraph). Clicked in + typed "Hello from the TipTap
+    editor" -> text rendered live in the editable surface (onUpdate fired). Computed
+    className = "tiptap ProseMirror prose dark:prose-invert max-w-none min-h-[60vh]
+    focus:outline-none ProseMirror-focused" (editorProps + prose confirmed). 0 console
+    errors/warnings across the flow. NOTE: no Save wired yet (later task), so the typed
+    edit did NOT persist to the DB — the note row is unchanged. dev DB is gitignored.
+  - `bun run build` PASS (6 routes; /notes/[id] now bundles the client editor + its
+    StarterKit deps — compiled clean), `bun run lint` PASS (clean). test/test:e2e
+    unchanged (see CHECKS STATUS — no suites yet, later prd tasks author them).
+  - NEXT (editor cluster, in order): title input in NoteEditor (controlled, init from
+    note.title) -> components/EditorToolbar.tsx (bold/italic/H1-3/paragraph, active
+    state via editor.isActive) -> code+inline-code+bullet-list+HR buttons -> save
+    (updateNoteAction, debounced auto-save, status indicator, skip initial load) ->
+    delete (confirm -> deleteNoteAction -> /dashboard) -> nav/error/toasts +
+    loading.tsx -> ShareToggle (toggleShareAction) + copy URL -> /p/[slug] public
+    viewer (@tiptap/static-renderer — NOT installed yet; reuse lib/tiptap `extensions`)
+    -> landing/styling/responsive -> Vitest + Playwright test setup.
+
 --------------------------------------------------------------------------------
 CHECKS STATUS (whole repo)
 --------------------------------------------------------------------------------
