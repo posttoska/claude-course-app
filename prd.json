@@ -485,7 +485,7 @@
       "Ensure touch targets are appropriate",
       "Test navigation works on mobile"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",

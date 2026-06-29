@@ -1958,3 +1958,62 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     responsive and dark mode" (e2e/responsive.spec.ts: mobile/tablet layout + dark
     mode via Playwright colorScheme/viewport emulation). Do responsive design first;
     the e2e asserts against it. After both, ALL prd tasks pass.
+
+[ui] Implement responsive design — passes=true
+  (Picked over the responsive/dark-mode e2e per the loop rule "foundation before
+  tests": the e2e asserts against THIS. Like the styling task, this was mostly an
+  AUDIT + targeted touch-target/overflow fixes — prior iters built every page
+  mobile-first, so layouts already adapt; nothing needed re-architecting.)
+  - AUDIT (Playwright MCP, live :3000 dev server, dark mode via OS pref): swept all
+    pages at 375px (mobile) and 768px (tablet). NO horizontal overflow anywhere
+    (documentElement.scrollWidth === clientWidth on /, /dashboard, /notes/[id]);
+    nav works on mobile (Header fits; signed-out Log in/Sign up, signed-in
+    Dashboard/Log out). Layouts already adapt via existing classes: landing hero
+    CTAs stack (flex-col -> sm:flex-row, h-11 full-width buttons), feature grid
+    1->3 cols (sm:grid-cols-3); dashboard note grid 1->2->3 (sm:grid-cols-2
+    lg:grid-cols-3, MEASURED 2 cols at 768); editor toolbar flex-wraps; ShareToggle
+    link+Copy row stacks (flex-col sm:flex-row); authenticate card is max-w-sm
+    centered. Steps "test 375/768" + "adjust layouts" were satisfied by existing
+    code — verified, not rewritten.
+  - FIX 1 (real overflow bug), components/NoteEditor.tsx delete <dialog>: was
+    `m-auto max-w-sm` (max-w-sm = 384px > a 375px viewport), so the modal could
+    exceed the screen width. Added `w-[calc(100vw-2rem)]` before max-w-sm so it
+    caps at viewport-2rem on narrow screens, stays <=384px on wide. VERIFIED via
+    showModal() + getBoundingClientRect: dialog now 343px wide at 375px viewport,
+    left 9 / right 352, fits fully, no page overflow (was at risk of 384px).
+  - FIX 2 (touch targets, prd "Ensure touch targets are appropriate"): the dense
+    editor toolbar buttons measured 32x28 / 38x28 and Header nav links ~32px tall —
+    all meet WCAG 2.2 AA (24px min) but are small for fingers. Added Tailwind v4.1
+    `pointer-coarse:` variants (confirmed supported: installed tailwindcss 4.1.18;
+    the variant targets touchscreens specifically) so TOUCH devices get >=44px
+    targets while DESKTOP stays compact:
+      * EditorToolbar ToolbarButton: added `inline-flex items-center justify-center`
+        (centers the glyph when enlarged) + `pointer-coarse:min-h-11
+        pointer-coarse:min-w-11` (44x44 on touch).
+      * Header Dashboard/Log in/Sign up links + LogoutButton: added `inline-flex
+        items-center` + `pointer-coarse:min-h-11`.
+    DESIGN: chose pointer-coarse over a universal bump so the desktop toolbar
+    doesn't balloon (10 buttons at 44px would wrap to multiple rows on desktop).
+    Flagging so a future iter doesn't "simplify" these to always-on min-h-11.
+  - VERIFIED the coarse styles compiled: fetched the served stylesheet and grepped —
+    2 `pointer: coarse` media blocks present, one referencing `min-height` (a
+    cssRules walk MISSES them — Tailwind v4 nests variant media queries inside
+    @layer, so grep the raw CSS text instead). DESKTOP (fine pointer) sizes
+    re-measured UNCHANGED post-edit: toolbar 32x28/38x28, header Dashboard 93x32,
+    logout 75x34 — no regression; matchMedia('(pointer: coarse)') is false on the
+    desktop MCP browser so the enlargement only applies on touch (the next e2e task
+    can assert it via a hasTouch/coarse device descriptor).
+  - VERIFIED: `bun run lint` PASS (clean), `bun run test` PASS 37/37 (unit
+    unaffected), `bun run build` PASS (all 6 app routes compile + TS clean — built
+    against the live dev DB without WAL contention this time), `bun run test:e2e`
+    PASS 17/17 (~1.6m; isolated :3100 + ./data/test.sqlite) — the inline-flex /
+    dialog-width / pointer-coarse changes don't touch any selectors (all by role/
+    label/text), so no regression. Throwaway screenshots + .playwright-mcp/ removed.
+    The "User not found" WARN in the e2e log is auth.spec's expected invalid-creds
+    response, not a bug.
+  - NEXT: 1 task remains — "Write E2E tests for responsive and dark mode"
+    (e2e/responsive.spec.ts). Assert: mobile (375px) + tablet (768px) layout (no
+    horizontal overflow, dashboard grid columns, Header nav usable), dark mode via
+    Playwright colorScheme:'dark' emulation (key surfaces render with dark tokens),
+    and ideally the coarse-pointer touch targets via a device with hasTouch. After
+    it, ALL prd tasks pass -> emit <complete>ALL_TASKS_DONE</complete>.

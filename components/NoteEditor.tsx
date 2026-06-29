@@ -215,7 +215,7 @@ export function NoteEditor({ note }: { note: Note }) {
         onCancel={(event) => {
           if (deleting) event.preventDefault();
         }}
-        className="m-auto max-w-sm rounded-lg border border-black/10 bg-background p-6 text-foreground backdrop:bg-black/50 dark:border-white/15"
+        className="m-auto w-[calc(100vw-2rem)] max-w-sm rounded-lg border border-black/10 bg-background p-6 text-foreground backdrop:bg-black/50 dark:border-white/15"
       >
         <h2 className="text-lg font-semibold">Delete note?</h2>
         <p className="mt-2 text-sm text-foreground/70">

@@ -38,7 +38,7 @@ function ToolbarButton({
       aria-pressed={isActive}
       aria-label={label}
       title={label}
-      className={`min-w-8 rounded-md px-2.5 py-1 text-sm leading-5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`inline-flex min-w-8 items-center justify-center rounded-md px-2.5 py-1 text-sm leading-5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:min-h-11 pointer-coarse:min-w-11 ${
         isActive
           ? "bg-foreground text-background"
           : "text-foreground/70 hover:bg-black/[.06] hover:text-foreground dark:hover:bg-white/10"

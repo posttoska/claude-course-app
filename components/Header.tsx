@@ -25,7 +25,7 @@ export async function Header() {
             <>
               <Link
                 href="/dashboard"
-                className="rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/[.04] dark:hover:bg-white/[.06]"
+                className="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/[.04] pointer-coarse:min-h-11 dark:hover:bg-white/[.06]"
               >
                 Dashboard
               </Link>
@@ -35,13 +35,13 @@ export async function Header() {
             <>
               <Link
                 href="/authenticate"
-                className="rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/[.04] dark:hover:bg-white/[.06]"
+                className="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/[.04] pointer-coarse:min-h-11 dark:hover:bg-white/[.06]"
               >
                 Log in
               </Link>
               <Link
                 href="/authenticate"
-                className="rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
+                className="inline-flex items-center rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background transition-opacity hover:opacity-90 pointer-coarse:min-h-11"
               >
                 Sign up
               </Link>
