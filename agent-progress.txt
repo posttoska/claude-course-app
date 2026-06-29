@@ -1811,3 +1811,52 @@ NEXT / NOTES FOR FUTURE ITERATIONS
   - NEXT: 2 styling tasks remain ("Apply consistent styling and dark mode",
     "Implement responsive design") + 4 e2e tasks (notes CRUD, sharing, responsive/
     dark mode). Responsive e2e ideally lands AFTER the responsive-design styling task.
+
+[testing] Write E2E tests for notes CRUD — passes=true
+  - Created e2e/notes.spec.ts: 5 tests driving the real dashboard -> editor journey
+    against the isolated test server (:3100 + ./data/test.sqlite), exercising the
+    genuine create/update/delete Server Actions + the SQLite round trip. Reuses the
+    existing signUp/newCredentials helpers; a local createNoteAndOpenEditor() helper
+    signs up a fresh user per test (isolation, matching auth.spec) -> clicks "New
+    note" -> waits for /notes/[id] -> waits for the editor. Chose this over the two
+    styling tasks per the loop rule "risky integration before routine UI": Playwright
+    on Windows+Bun is the flaky surface, and proving the editor journey here also
+    derisks the later responsive e2e task.
+  - SELECTOR DECISIONS (robust, not brittle): the TipTap editable body is targeted
+    by [contenteditable="true"] (the title is a plain <input>, so it's unambiguous
+    and survives TipTap version bumps — better than the internal .ProseMirror class).
+    Title via getByLabel("Note title") (the input's aria-label). Save status via
+    getByRole("status") (NoteEditor's role="status" span), waited to read exactly
+    "Saved". Toolbar buttons by aria-label (Bold/Italic/"Heading 1"). The confirm
+    dialog is scoped with getByRole("dialog") so its "Delete" button doesn't collide
+    with the footer "Delete" trigger (the closed <dialog> is display:none -> hidden,
+    so the trigger click is unambiguous; the confirm click is dialog-scoped).
+  - THE 5 TESTS (map to the prd steps): (1) create — New note navigates to
+    /notes/[id] and the title input + toolbar + body are visible; (2) edit+persist —
+    fill title + type body, explicit Save, status "Saved", RELOAD, title value +
+    body text survived (proves the update action wrote to SQLite); (3) formatting —
+    type "Format me", select-all, Bold then Italic assert aria-pressed + DOM
+    <strong>/<em>, Heading 1 asserts DOM <h1>; (4) auto-save — edit title, DON'T
+    click Save, wait for the debounced auto-save to reach "Saved", reload, value
+    persisted; (5) delete — auto-save a titled note, open the confirm dialog
+    ("Delete note?"), confirm, redirect to /dashboard, the note link is gone +
+    "No notes yet" empty state returns.
+  - BUG FOUND & FIXED IN THE TEST (not app code): the heading sub-test first clicked
+    H1 while the full multi-mark (bold+italic) selection was active — toggleHeading
+    left aria-pressed=false (heading didn't apply deterministically over a marked
+    range selection). FIX: place a collapsed cursor in the block first (body.click())
+    before clicking H1 — a block-level command targets the cursor's block; DOM <h1>
+    then asserts before aria-pressed. App behavior is correct (a real user clicks
+    into the block); only the test's interaction needed tightening.
+  - TOAST-OVERLAP AVOIDANCE: the delete test persists its title via AUTO-SAVE (no
+    success toast) rather than a manual Save, so the bottom-center toast can't
+    overlap/intercept the Delete control. (Manual Save raises a "Note saved" toast;
+    the edit test uses it but only reloads afterward, so no interception risk there.)
+  - VERIFIED: ran the new spec in isolation (5/5) after the heading fix, then the
+    FULL suite `bun run test:e2e` -> 12/12 PASS (~43s: 4 auth + 5 notes + 3 smoke),
+    no regressions. `bun run lint` clean, `bun run build` PASS (7 routes),
+    `bun run test` PASS 37/37 (unit). The "User not found" WARN in the e2e log is the
+    expected better-auth response for auth.spec's invalid-credentials test, not a bug.
+  - NEXT: 4 tasks remain — 2 styling (consistent styling/dark mode, responsive
+    design) + 2 e2e (sharing, responsive/dark mode). The responsive/dark-mode e2e
+    should land AFTER the responsive-design styling task it asserts against.

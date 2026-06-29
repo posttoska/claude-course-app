@@ -573,7 +573,7 @@
       "Test auto-save works",
       "Test delete with confirmation"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",
