@@ -1334,8 +1334,10 @@ CHECKS STATUS (whole repo)
                       + authz), __tests__/actions/notes.test.ts (14, server-action
                       guards — auth/ownership/validation/revalidate). The UNIT-TEST
                       TRILOGY is now COMPLETE (db + notes + actions).
-  bun run test:e2e  : N/A — no test:e2e script defined; Playwright not installed
-                      (prd task "Set up Playwright for E2E testing" still pending).
+  bun run test:e2e  : PASS — 1 file / 3 smoke tests (e2e/smoke.spec.ts) on the
+                      isolated test server (:3100 + ./data/test.sqlite + .next-e2e).
+                      Playwright harness is now SET UP; the feature specs
+                      (auth/notes/sharing/responsive) are the remaining testing tasks.
 
 --------------------------------------------------------------------------------
 NEXT / NOTES FOR FUTURE ITERATIONS
@@ -1652,3 +1654,80 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     Windows (watch for the flagged Bun+Next dev-server flakiness), e2e/ dir +
     auth/db helpers. It unblocks the 4 e2e spec tasks (auth/notes/sharing/responsive).
     Also still open: 3 presentational UI tasks (landing/styling/responsive).
+
+[testing] Set up Playwright for E2E testing — passes=true
+  (The risky integration — chosen over the 3 routine presentational UI tasks per
+  the loop rule "foundation/risky before routine". UNBLOCKS all 4 e2e spec tasks
+  (auth/notes/sharing/responsive). @playwright/test@1.61.1 + chromium were already
+  in devDeps/cache; this iter built the config, helpers, DB-reset, test:e2e script,
+  and a 3-test smoke that proves the whole harness end-to-end.)
+  - ISOLATION (the core design): the E2E server is fully decoupled from local dev,
+    so it can run alongside the :3000 dev server AND in CI without contention:
+      * PORT 3100 (dev is 3000) — set via the webServer `env`.
+      * DATABASE_PATH=./data/test.sqlite — a dedicated, disposable SQLite file
+        (lib/db.ts reads DATABASE_PATH; .gitignored under /data/).
+      * NEXT_DIST_DIR=.next-e2e — its OWN Turbopack build dir. Added an env-driven
+        `distDir` to next.config.ts (`...(process.env.NEXT_DIST_DIR ? {distDir} :
+        {})`). WHY: two `next dev` (Turbopack) servers sharing `.next` is flaky on
+        Windows. A normal `bun run build`/`dev` leaves NEXT_DIST_DIR unset -> default
+        `.next`, unchanged. Flagging so a future iter doesn't drop the distDir spread.
+      * BETTER_AUTH_URL + NEXT_PUBLIC_APP_URL -> http://localhost:3100 so better-auth's
+        origin check passes on the sign-up POST and share links point at the test port.
+    BETTER_AUTH_SECRET still comes from .env (Next loads it; webServer `env` only
+    overrides the 4 vars above — Playwright merges `env` onto process.env, and Next's
+    @next/env does NOT override already-set process.env, so the overrides win).
+  - playwright.config.ts: testDir ./e2e; ONE chromium project (devices Desktop
+    Chrome); fullyParallel:false + workers:1 (SQLite is single-writer — serial avoids
+    "database is locked" contention, the flagged WAL hazard); timeout 60s (cold
+    Turbopack route compiles + first-request auth migrations are slow); webServer
+    `command: "bun run dev"`, url :3100, reuseExistingServer:!CI, 120s startup timeout,
+    + the `env` block above. trace on-first-retry; retries 2 on CI.
+  - DB RESET (e2e/setup.ts) — the tricky part, two findings worth remembering:
+      1. Playwright launches the webServer BEFORE globalSetup runs. The server's cold
+         start opens test.sqlite (lib/auth migrations on import, triggered by the
+         readiness GET /), so by the time a globalSetup runs the WAL files are LOCKED
+         -> rmSync threw EPERM. CONCLUSION: a Playwright globalSetup is TOO LATE to
+         reset the DB. Reset must happen BEFORE `playwright test`.
+      2. Playwright's globalSetup loader compiles TS to CJS, where `import.meta` is
+         illegal ("Cannot use 'import.meta' outside a module") — so a file using
+         import.meta CANNOT also be wired as globalSetup.
+    RESOLUTION: e2e/setup.ts exports resetTestDb() (rmSync the 3 test.sqlite* files,
+    force:true ignores missing, swallow EPERM/EBUSY) and self-runs via
+    `if ((import.meta as {main?}).main) resetTestDb()`. It is NOT a globalSetup; the
+    `test:e2e` script runs it pre-launch: `bun e2e/setup.ts && playwright test`. Under
+    bun, import.meta.main works; nothing imports it as CJS, so no import.meta error.
+    Flagging both findings so a future iter doesn't "restore" globalSetup wiring
+    (reintroduces the import.meta crash) or rely on globalSetup for the reset (too late).
+  - e2e/helpers/auth.ts: signUp(page, creds) (toggle to sign-up, fill Name/Email/
+    Password via getByLabel, submit, waitForURL **/dashboard) + login(page, creds)
+    + uniqueEmail()/newCredentials() (timestamp+random emails so re-runs never collide
+    even on a non-pristine DB). 60s redirect timeout for cold compiles. Selectors:
+    the only "Sign up" control in login mode is the toggle; after toggling the only
+    "Sign up" is the submit — both getByRole("button",{name:"Sign up"}) calls are
+    unambiguous at their point of use.
+  - e2e/smoke.spec.ts: 3 tests proving the harness — landing renders (Header "Notes"
+    link), /authenticate renders (heading "Welcome back" + "Log in" button), and a
+    NEW USER CAN SIGN UP -> /dashboard (uses the signUp helper -> asserts the "Log out"
+    button = active session). The last test exercises the full webServer+test-DB+auth
+    POST path, de-risking the later auth/notes specs.
+  - CONFIG HYGIENE (both REQUIRED — a generated .next-e2e dir breaks tooling that only
+    knew about .next): eslint.config.mjs globalIgnores += .next-e2e/**, test-results/**,
+    playwright-report/** (without this, eslint lints the generated .next-e2e -> 6390
+    problems). .gitignore += /.next-e2e/ + the playwright artifact dirs. tsconfig's
+    `**/*.ts` include still typechecks .next-e2e cleanly (build verified), so no
+    tsconfig change needed. Flagging so a future iter keeps these ignores.
+  - VERIFIED: `bun run test:e2e` PASS (3/3, ~10s, clean — no EPERM noise after the
+    pre-launch reset). `bun run test` PASS (4 files/37 — unit suite unaffected).
+    `bun run lint` PASS (clean after the .next-e2e ignore). `bun run build` PASS (7
+    routes; typechecks the new e2e/*.ts + playwright.config.ts + setup.ts). NOTE: one
+    build transiently failed with the FLAGGED WAL hazard ("Failed to collect page data
+    for /api/auth" — 15 workers cold-starting auth contend with the live :3000 dev
+    server); a plain re-run PASSED. If a future build fails on /api/auth page data,
+    just re-run.
+  - NEXT (testing): the 4 e2e spec tasks are now unblocked — e2e/auth.spec.ts (sign
+    up / log in / invalid creds / redirect / logout — reuse the auth helpers),
+    e2e/notes.spec.ts (create/edit/format/autosave/delete), e2e/sharing.spec.ts
+    (toggle public, public URL, anon access, 404 for private/invalid, copy), and
+    e2e/responsive.spec.ts (mobile/tablet/dark mode). Each should sign up a fresh
+    user via the helper (clean isolation). Also still open: 3 presentational UI tasks
+    (landing/styling/responsive).

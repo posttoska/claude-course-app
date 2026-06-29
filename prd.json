@@ -547,7 +547,7 @@
       "Create e2e/setup.ts for test database setup",
       "Verify 'bun test:e2e' runs"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",

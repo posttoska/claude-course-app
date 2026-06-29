@@ -15,7 +15,14 @@
 
 # next.js
 /.next/
+/.next-e2e/
 /out/
+
+# playwright e2e
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
 
 # local database (SQLite lives here; created at runtime — never commit)
 /data/
