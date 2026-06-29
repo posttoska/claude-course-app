@@ -461,7 +461,7 @@
       "Improve CTA button styling",
       "Ensure responsive layout"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

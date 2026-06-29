@@ -1770,3 +1770,44 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     private/invalid slugs, copy), e2e/responsive.spec.ts (mobile/tablet/dark mode —
     ideally after the 3 styling tasks land). Each signs up a fresh user via the
     helper for clean isolation. Also still open: the 3 presentational UI tasks.
+
+[ui] Style the landing page — passes=true
+  - Replaced the default Next.js skeleton in app/page.tsx (next/Image logos +
+    "edit page.tsx" boilerplate) with a real marketing landing page. Chose this
+    self-contained, low-risk UI task over the e2e-test tasks; it also unblocks the
+    later "consistent styling/dark mode" pass which reviews ALL pages incl. this one.
+  - DESIGN: async Server Component reading the authoritative session via getSession()
+    (SPEC §7.5), so the hero CTA matches reality on first paint — signed-in users get
+    a single "Go to dashboard" button, visitors get "Get started" + "Log in". (SPEC
+    §11 says "/" redirects; prd instead asks to STYLE a landing page, so followed prd
+    — an actual page, not a redirect.) This flips "/" from static ○ to ƒ Dynamic in
+    the build output (correct: it now reads cookies/headers).
+  - CONTENT: hero (balanced h1 "Write rich notes. Share them with a link." + subtitle
+    + CTA) and a 3-card feature grid (Rich-text editing / Private by default / Share
+    with one link) describing the real app capabilities. Marketing copy + feature
+    highlights + CTA styling = the 3 prd content steps.
+  - STYLE: matches the app's language (max-w-5xl container, foreground/background
+    theme tokens, rounded-md, border-black/10 dark:border-white/15, bg-foreground
+    text-background primary button). Responsive: hero text scales 4xl->5xl->6xl,
+    CTA stacks full-width on mobile -> inline auto-width at sm:, feature grid 1-col
+    -> sm:3-col. Dark-mode-aware via the existing tokens. text-balance/text-pretty
+    on the headings/copy.
+  - VERIFIED with Playwright MCP against the live dev server (:3000): desktop (1077px)
+    + mobile (375px) full-page screenshots both render cleanly — hero + CTA + 3 cards,
+    0 console errors. Signed-in CTA showed "Go to dashboard" (auth-aware branch
+    confirmed live; the signed-out "Get started"/"Log in" branch is the standard
+    pattern, code-reviewed). Mobile: hero stacks, CTA full-width, cards single-column.
+  - REGRESSION FIXED (caused by this change): the new signed-out landing CTA adds a
+    "Log in" link, so e2e/auth.spec.ts's logout test ("header reverts to signed-out
+    state") hit a strict-mode violation — getByRole("link",{name:"Log in"}) now
+    matched BOTH the Header nav link and the landing CTA. Scoped that assertion to
+    getByRole("navigation").getByRole(...) (matches the test's own comment about the
+    HEADER). This also retires the now-stale progress note that "/" had no "Log in"
+    text. A11y win: this is why the Header's <nav> role mattered.
+  - VERIFIED: `bun run lint` PASS (fixed one react/no-unescaped-entities on "it's" ->
+    "it&apos;s"), `bun run test` PASS 37/37, `bun run build` PASS (7 routes, "/" now
+    ƒ Dynamic), `bun run test:e2e` PASS 7/7 (~23s) incl. the fixed logout test. No
+    build DB-lock flake this run. Screenshots were throwaway (removed).
+  - NEXT: 2 styling tasks remain ("Apply consistent styling and dark mode",
+    "Implement responsive design") + 4 e2e tasks (notes CRUD, sharing, responsive/
+    dark mode). Responsive e2e ideally lands AFTER the responsive-design styling task.

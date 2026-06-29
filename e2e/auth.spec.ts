@@ -64,8 +64,9 @@ test.describe("authentication", () => {
     // LogoutButton navigates home after signing out.
     await page.waitForURL((url) => url.pathname === "/");
 
-    // The header reverts to its signed-out state.
-    await expect(page.getByRole("link", { name: "Log in" })).toBeVisible();
+    // The header reverts to its signed-out state. Scope to the nav: the landing
+    // page also has a "Log in" CTA, so an unscoped query is ambiguous.
+    await expect(page.getByRole("navigation").getByRole("link", { name: "Log in" })).toBeVisible();
 
     // The session is truly gone: the protected dashboard now bounces to /authenticate.
     await page.goto("/dashboard");
