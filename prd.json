@@ -473,7 +473,7 @@
       "Test dark mode works across all pages",
       "Fix any contrast issues"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ui",

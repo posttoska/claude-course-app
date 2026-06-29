@@ -1911,3 +1911,50 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     mode; Implement responsive design) + 1 e2e (Write E2E tests for responsive and
     dark mode). The responsive/dark-mode e2e should land AFTER the responsive-design
     styling task it asserts against, so do the 2 styling tasks first.
+
+[ui] Apply consistent styling and dark mode — passes=true
+  (Picked over "Implement responsive design" + the responsive/dark-mode e2e per the
+  loop rule "foundation before tests": this styling pass is what the e2e task asserts
+  against. This was mostly a REVIEW + one real fix — the UI was already built with a
+  consistent token system across prior iters, so there was little to "redo".)
+  - AUDIT FINDING: the styling is already uniform across every page/component — a
+    single design language: foreground/background theme tokens, border-black/10
+    dark:border-white/15 (interactive controls bump to /15–/20 deliberately),
+    text-foreground/55–70 for secondary text, bg-foreground text-background primary
+    buttons, prose dark:prose-invert for rich text, mx-auto max-w-5xl/3xl + px-4 py-10
+    sm:px-6 page rhythm. Spacing/padding is consistent (varied by context, not random).
+    Editor is already clean/minimal; note typography already uses prose. So steps
+    1–3 of the prd were satisfied by existing code — verified, not rewritten.
+  - THE ONE REAL CHANGE (genuine dark-mode correctness fix), app/globals.css: added
+    `color-scheme: light` to :root and `color-scheme: dark` inside the existing
+    @media (prefers-color-scheme: dark) block. WHY: the app themes its OWN elements
+    via tokens, but NATIVE UA controls (scrollbars, text-input caret/spinners, the
+    <dialog> default chrome, autofill backgrounds) ignore those tokens and stay LIGHT
+    on a dark page without `color-scheme`. This is the standard modern fix (also what
+    the modern-tailwind guidance recommends). Light mode is unchanged (`light` is the
+    UA default). No component edits were needed — the fix is purely at the :root.
+  - DARK-MODE VERIFICATION (Playwright MCP, dev server :3000, page.emulateMedia
+    colorScheme:'dark', full-page screenshots): landing, /dashboard (cards + Public/
+    Private badges), /notes/[id] editor (toolbar active state, Delete/Save, green
+    share toggle, dark share-link input), /authenticate (form inputs), and /p/[slug]
+    public viewer ALL render correctly in dark — legible contrast everywhere, 0
+    console errors across the whole sweep. No contrast issues found (step 5).
+  - TYPOGRAPHY SPOT-CHECK (rules out a false alarm): a public note's <p> computes to
+    fontWeight 400 / 16px and headings render larger/bold — prose typography is
+    correct. (A transient "everything looks bold" screenshot was MY muddled scripted
+    typing creating two <h1>s on an empty doc, NOT a bug: a clean cursor-placed click
+    of the "Heading 2" toolbar button produces <h2> as expected. No app/toolbar fix
+    needed — flagging so a future iter doesn't chase a phantom heading bug.)
+  - VERIFIED: `bun run lint` PASS (clean; CSS isn't eslint-scoped but ran it anyway),
+    `bun run test` PASS 37/37 (unit unaffected), `bun run build` PASS (7 routes; built
+    against an isolated DATABASE_PATH=./data/build-check.sqlite — removed after — to
+    dodge the flagged WAL contention with the live :3000 dev server), `bun run test:e2e`
+    PASS 17/17 (~1.5m; isolated :3100 + ./data/test.sqlite — a CSS-only change can't
+    affect e2e logic, ran it to confirm no regression). Throwaway screenshots removed;
+    .playwright-mcp/ is gitignored. The "User not found" WARN in the e2e log is
+    auth.spec's expected invalid-creds response, not a bug.
+  - NEXT: 2 tasks remain — "Implement responsive design" (test 375px/768px, adjust
+    Tailwind responsive classes, touch targets, mobile nav) then "Write E2E tests for
+    responsive and dark mode" (e2e/responsive.spec.ts: mobile/tablet layout + dark
+    mode via Playwright colorScheme/viewport emulation). Do responsive design first;
+    the e2e asserts against it. After both, ALL prd tasks pass.

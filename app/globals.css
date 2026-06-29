@@ -2,6 +2,10 @@
 @plugin "@tailwindcss/typography";
 
 :root {
+  /* Tell the UA to render native controls (scrollbars, form fields, the editor
+     caret, <dialog>, autofill) in the matching scheme, so they don't stay light
+     on a dark page. Tracks the OS preference alongside the tokens below. */
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -15,6 +19,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --background: #0a0a0a;
     --foreground: #ededed;
   }
