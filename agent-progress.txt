@@ -1731,3 +1731,42 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     e2e/responsive.spec.ts (mobile/tablet/dark mode). Each should sign up a fresh
     user via the helper (clean isolation). Also still open: 3 presentational UI tasks
     (landing/styling/responsive).
+
+[testing] Write E2E tests for authentication — passes=true
+  (FIRST feature spec on top of the proven harness; chose it over the routine UI
+  styling tasks per the loop rule "risky integrations before routine" — it's the
+  first real auth-flow spec and sets the pattern for the notes/sharing/responsive
+  specs.) Created e2e/auth.spec.ts — 4 tests in a describe("authentication"):
+  - SIGN UP: signUp() helper fills the form + waits for the /dashboard redirect ->
+    assert URL ends /dashboard + the Header "Log out" button is visible (active
+    session). Covers prd "user can sign up" + "redirect to dashboard after auth".
+  - LOG IN: seeds the account through the auth API via the test's ISOLATED `request`
+    fixture (POST /api/auth/sign-up/email) so its Set-Cookie never reaches the page
+    — the browser starts anonymous and we exercise the login UI in isolation. Then
+    login() helper -> assert /dashboard + "Log out" visible. (Cleaner than a UI
+    signup+logout dance; the sign-up API path was already verified in earlier iters.)
+  - INVALID CREDS: unknown email (uniqueEmail) + wrong password -> assert role=alert
+    visible, URL still /authenticate, and NO "Log out" button (no session). Asserts
+    the alert presence, not exact copy — the message comes from better-auth (it logs
+    the expected "User not found" WARN; no user enumeration, same error either way).
+  - LOGOUT: signUp() -> click Header "Log out" -> waitForURL pathname "/" -> assert
+    Header reverted to the "Log in" link AND that /dashboard now bounces to
+    /authenticate (session truly cleared, not just a client redirect). Covers prd
+    "logout works". The landing "/" body has no "Log in" text (still the skeleton),
+    so the Header link selector is unambiguous.
+  - VERIFIED: `bun run test:e2e` PASS — 7/7 (4 new auth + 3 smoke), ~25s, 1 worker,
+    against the isolated test server (:3100 + ./data/test.sqlite). `bun run test`
+    (unit) PASS 37/37. `bun run lint` PASS. `bun run build` PASS (7 routes) — but
+    note the FLAGGED WAL hazard bit again: build's 15 page-data workers cold-starting
+    the schema contended with the long-running :3000 dev server holding data/
+    app.sqlite -> SQLITE_BUSY_RECOVERY ("database is locked") on /_not-found + /p/
+    [slug], TWICE. Rather than kill the user's dev server, ran the build once with an
+    ISOLATED DATABASE_PATH=./data/build-check.sqlite (throwaway, removed after) -> a
+    clean PASS, proving the failure is pure DB contention, not a code regression. The
+    e2e spec file isn't part of `next build` anyway. If a future build fails on a DB
+    lock, either re-run or build against a throwaway DATABASE_PATH.
+  - NEXT (testing): e2e/notes.spec.ts (create/edit/format/autosave/delete via the
+    editor), e2e/sharing.spec.ts (toggle public, public URL, anon access, 404 for
+    private/invalid slugs, copy), e2e/responsive.spec.ts (mobile/tablet/dark mode —
+    ideally after the 3 styling tasks land). Each signs up a fresh user via the
+    helper for clean isolation. Also still open: the 3 presentational UI tasks.

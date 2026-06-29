@@ -560,7 +560,7 @@
       "Test redirect to dashboard after auth",
       "Test logout works"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",
