@@ -1860,3 +1860,54 @@ NEXT / NOTES FOR FUTURE ITERATIONS
   - NEXT: 4 tasks remain — 2 styling (consistent styling/dark mode, responsive
     design) + 2 e2e (sharing, responsive/dark mode). The responsive/dark-mode e2e
     should land AFTER the responsive-design styling task it asserts against.
+
+[testing] Write E2E tests for note sharing — passes=true
+  (Chose this over the 2 routine presentational UI tasks per the loop rule "risky
+  integration before routine UI": it's fully unblocked — the share toggle + public
+  page are end-to-end already — and exercises the flaky Windows+Bun+Playwright
+  surface. The OTHER remaining e2e task (responsive/dark mode) still depends on the
+  responsive-design styling task, so this was the only e2e spec ready to write.)
+  - Created e2e/sharing.spec.ts: 5 tests driving the real ShareToggle on the
+    /notes/[id] editor against the isolated test server (:3100 + ./data/test.sqlite),
+    exercising the genuine toggleShareAction Server Action + the SQLite round trip.
+    Reuses the signUp/newCredentials helpers. Two local helpers: createNote(page,
+    prefix, title, body?) (sign up fresh user -> New note -> set title/body -> WAIT
+    for auto-save "Saved" so the persisted content — not the defaults — shows on the
+    public page) and setShared(page, makePublic) (click the role="switch" "Make note
+    public", assert aria-checked, then WAIT for the resulting toast to clear).
+  - THE 5 TESTS (map to the prd steps): (1) toggle+URL — starts private (switch off,
+    "Only you can see this note.", no link); flip on -> "Anyone with the link can
+    view this note." + a "Public share link" input whose value matches
+    ^http://localhost:3100/p/.+ (slug-based, never the internal id, SPEC §10.1/§14.5);
+    reload -> still public (DB write persisted). (2) anonymous access — share a
+    titled+bodied note, grab the link, open it in a FRESH browser.newContext() (no
+    cookies) -> 200 + the <h1> title + body text visible + NO contenteditable
+    (read-only); proves the public route needs no session (SPEC §10.3). (3) unknown
+    slug -> page.goto returns HTTP 404 (notFound()). (4) unshare gate — share, capture
+    the link, toggle OFF -> link input gone + "Only you" message back; the OLD link
+    now 404s in an anon context (slug RETAINED per SPEC §10.2 but lookup gates SOLELY
+    on is_public=1, the security-critical invariant). (5) copy — grant clipboard
+    permissions (localhost is a secure context), click "Copy link" -> button label
+    flips to "Copied!" AND navigator.clipboard.readText() === the share URL.
+  - TOAST-OVERLAP AVOIDANCE (the one real gotcha): the Toast container is
+    pointer-events-none but each toast DIV is pointer-events-auto, so a lingering
+    bottom-center toast can intercept a later click (second toggle / Copy link).
+    setShared() therefore waits `expect(getByText("Note is now public"/"...private"))
+    .toBeHidden()` (6s > the 3s auto-dismiss) before returning. Flagging so a future
+    iter doesn't drop that wait and reintroduce flaky click-interception.
+  - 404 ASSERTION: relies on Next's notFound() returning an HTTP 404 status on the
+    main document response (response.status() === 404) — verified for both the
+    unknown-slug and the unshared-but-slugged cases. The anon-read + unshare-404
+    tests use browser.newContext() (cookie-less); they navigate the ABSOLUTE share
+    URL from the input value (a manual context doesn't inherit use.baseURL).
+  - VERIFIED: ran the new spec in isolation (5/5, ~50s), then the FULL suite
+    `bun run test:e2e` -> 17/17 PASS (~1.4m: 4 auth + 5 notes + 5 sharing + 3 smoke),
+    no regressions. `bun run test` PASS 37/37 (unit), `bun run lint` clean,
+    `bun run build` PASS (7 routes; built against an isolated DATABASE_PATH=./data/
+    build-check.sqlite — removed after — to dodge the flagged WAL contention with the
+    user's :3000 dev server; it typechecks the new spec file). The "User not found"
+    WARN in the e2e log is auth.spec's expected invalid-creds response, not a bug.
+  - NEXT: 3 tasks remain — 2 presentational UI (Apply consistent styling and dark
+    mode; Implement responsive design) + 1 e2e (Write E2E tests for responsive and
+    dark mode). The responsive/dark-mode e2e should land AFTER the responsive-design
+    styling task it asserts against, so do the 2 styling tasks first.

@@ -586,7 +586,7 @@
       "Test 404 for private/invalid slugs",
       "Test copy URL works"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",
