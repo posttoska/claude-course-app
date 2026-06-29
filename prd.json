@@ -598,6 +598,6 @@
       "Test dark mode styling",
       "Verify all interactions work on mobile"
     ],
-    "passes": false
+    "passes": true
   }
 ]

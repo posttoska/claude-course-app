@@ -2017,3 +2017,53 @@ NEXT / NOTES FOR FUTURE ITERATIONS
     Playwright colorScheme:'dark' emulation (key surfaces render with dark tokens),
     and ideally the coarse-pointer touch targets via a device with hasTouch. After
     it, ALL prd tasks pass -> emit <complete>ALL_TASKS_DONE</complete>.
+
+[testing] Write E2E tests for responsive and dark mode — passes=true  (LAST TASK)
+  (COMPLETES the testing category AND the entire prd — all tasks now passes=true.)
+  - Created e2e/responsive.spec.ts: 5 tests in 3 describes, asserting against the
+    REAL pages the prior "Implement responsive design" / styling iters built.
+    Reuses the proven harness (playwright.config :3100 + ./data/test.sqlite, the
+    signUp helper, EDITOR_BODY contenteditable + SAVE_TIMEOUT conventions from
+    notes/sharing.spec). No new deps/config — just a spec file.
+  - WHAT IT ASSERTS (drives layout/scheme, not pixels-perfect):
+      * responsive layout / MOBILE 375px: header "Notes" nav link visible; the two
+        hero CTAs STACK (Get started above hero "Log in", scoped to the first
+        <section> so it doesn't collide with the header's Log in); hero CTA height
+        >= 44px (touch target, h-11); 3 feature cards stack into one column (each
+        below the previous, same left edge) via boundingBox comparison.
+      * responsive layout / TABLET 768px: 3 feature cards sit on ONE ROW (shared
+        top y within 1px, strictly increasing x) — proves sm:grid-cols-3 kicks in
+        at the >=640px sm breakpoint.
+      * dark mode: emulateMedia({colorScheme:'dark'}) -> body backgroundColor
+        rgb(10,10,10) (--background #0a0a0a) + documentElement color-scheme "dark";
+        switch to 'light' (live, no reload) -> rgb(255,255,255). Second test proves
+        the Tailwind `dark:` VARIANT utilities react (header border-bottom-color
+        differs light vs dark: border-black/10 -> dark:border-white/15), not just
+        the CSS :root tokens.
+      * mobile interactions 375px: full sign-up journey -> /dashboard, Log out
+        control visible, "New note" -> editor, title edit AUTO-SAVES ("Saved"
+        status), survives reload. Confirms nav + the real Server Actions work on a
+        phone-sized viewport.
+  - DESIGN/SELECTOR NOTES (so a future iter doesn't "fix" them):
+      * Dark mode is pure prefers-color-scheme (globals.css @media + Tailwind v4's
+        default media-strategy dark: variant) — NO class toggle — so the test uses
+        page.emulateMedia colorScheme, never a class.
+      * Feature cards located via getByRole("region",{name:"Features"}) (the
+        section's aria-label) .locator("article"); arrangement checked by
+        boundingBox geometry (robust to the `grid` w/o grid-cols computing
+        gridTemplateColumns:"none" on mobile).
+      * Hero "Log in" disambiguated from the header's via `section:first`.
+      * DROPPED an initial touch-target assert on the dashboard "New note" button:
+        it's px-4 py-2 text-sm (~36px), intentionally compact (the touch-up was
+        scoped to header/toolbar via pointer-coarse, not every button). Asserting
+        44px there would be a FALSE failure. Touch-target coverage is the hero
+        h-11 CTA instead. Did NOT chase the pointer-coarse:min-h-11 header/toolbar
+        targets via a hasTouch device — would need isMobile/coarse-pointer
+        emulation that's finicky in chromium; the deterministic h-11 check covers
+        the prd "touch targets" step without that fragility.
+  - VERIFIED: `bun run lint` PASS (clean); `bun run test` PASS 37/37 (unit
+    unaffected); `bun run test:e2e` PASS 22/22 (~1.7m, was 17 — +5 new; isolated
+    :3100); the 5 responsive tests also pass in isolation (15.7s). `bun run build`
+    PASS (all 6 app routes, TS clean). The "User not found" WARN in the e2e log is
+    auth.spec's expected invalid-creds case, not a bug.
+  - ALL PRD TASKS NOW passes=true -> emitting <complete>ALL_TASKS_DONE</complete>.
