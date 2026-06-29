@@ -48,7 +48,7 @@ After each completed task:
 Mark passes=true in the prd.json file (for the completed task), update $PROGRESS_FILE, commit via Git.
 
 When ALL tasks have passes=true, output: <complete>ALL_TASKS_DONE</complete>
-" 2>&1) || {
+" 2>&1 | tee /dev/tty) || {
     echo "Error: claude failed with exit code $?"
     echo "Output: $result"
     exit 1
